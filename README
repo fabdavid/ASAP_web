@@ -1,0 +1,4 @@
+To restart the delayed jobs
+ RAILS_ENV=development bin/delayed_job --pool=fast:8 --pool=medium:4 --pool=slow:2  restart
+RAILS_ENV=development bin/delayed_job --pool=fast:4 --pool=medium:3 --pool=slow:2  restart
+ RAILS_ENV=development bin/delayed_job --pool=fast:1 --pool=medium:1 --pool=slow:1  restart

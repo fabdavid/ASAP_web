@@ -1,0 +1,31 @@
+<p id="notice"><%= notice %></p>
+
+<h1>Speeds</h1>
+
+<table>
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Name</th>
+      <th>Logo</th>
+      <th colspan="3"></th>
+    </tr>
+  </thead>
+
+  <tbody>
+    <% @speeds.each do |speed| %>
+      <tr>
+	<td><%= speed.id %></td>
+	<td><%= speed.name %></td>
+	<td><%= speed.logo %></td>
+        <td><%= link_to 'Show', speed %></td>
+        <td><%= link_to 'Edit', edit_speed_path(speed) %></td>
+        <td><%= link_to 'Destroy', speed, method: :delete, data: { confirm: 'Are you sure?' } %></td>
+      </tr>
+    <% end %>
+  </tbody>
+</table>
+
+<br>
+
+<%= link_to 'New Speed', new_speed_path %>

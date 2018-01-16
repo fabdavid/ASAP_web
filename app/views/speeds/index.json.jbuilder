@@ -1,0 +1,1 @@
+json.array! @speeds, partial: 'speeds/speed', as: :speed

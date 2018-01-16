@@ -1,0 +1,1 @@
+json.array! @db_sets, partial: 'db_sets/db_set', as: :db_set

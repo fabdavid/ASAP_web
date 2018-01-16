@@ -1,0 +1,25 @@
+<%= form_for(status) do |f| %>
+  <% if status.errors.any? %>
+    <div id="error_explanation">
+      <h2><%= pluralize(status.errors.count, "error") %> prohibited this status from being saved:</h2>
+
+      <ul>
+      <% status.errors.full_messages.each do |message| %>
+        <li><%= message %></li>
+      <% end %>
+      </ul>
+    </div>
+  <% end %>
+
+<table>
+<tr><td>Name</td><td><%= f.text_field :name %></td></tr>
+<tr><td>Label</td><td><%= f.text_field :label %></td></tr>
+<tr><td>Color</td><td><%= f.text_field :color %></td></tr>
+<tr><td>Image extension</td><td><%= f.text_field :img_extension %></td></tr>
+</table>
+
+
+  <div class="actions">
+    <%= f.submit %>
+  </div>
+<% end %>

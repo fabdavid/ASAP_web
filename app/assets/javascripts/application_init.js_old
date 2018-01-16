@@ -1,0 +1,3248 @@
+$(function() {
+    /* 
+     * Copyright (C) 2016 Adrian Shajkofci - All Rights Reserved
+     */
+    ////////////////////////
+    // Project launch form START
+    ////////////////////////    
+    //
+    // URLs
+    if (/localhost/.test(window.location.href))    
+    {
+        var SERVER = "http://localhost:8080/app/api/";
+        var NAV = "http://localhost:8080/";
+    }
+    else
+    {
+        var SERVER = "http://149.202.112.49/app/api/";
+        var NAV = "http://149.202.112.49/";
+    }
+
+    var UPLOAD = NAV + "static/";
+    var DEBUG = 0;
+    
+    // Filenames
+    var PCA_JSON_FILENAME = "PCA.json";
+    var TSNE_JSON_FILENAME = "TSNE.json";
+    var TSNE3D_JSON_FILENAME = "3DTSNE.json";
+    var ZIFA3D_JSON_FILENAME = "3DZIFA.json";
+    var ZIFA_JSON_FILENAME = "ZIFA.json";
+    var DE_JSON_FILENAME = "DE.json";
+    var PROCESSING_JSON_FILENAME = "PROCESSING.json";
+    
+    // Project status
+    var STATUS_DE = 6;
+    var STATUS_CLUSTERED = 5;
+    var STATUS_RESULTS = 4;
+    var COLORMAP = ['red', 'blue', 'green', 'purple', 'orange', 'grey', 'yellow', 'brown', 'darkblue', 'pink', 'lightblue', 'darkgreen', 'black', 'lightgreen', 'salmon', 'tan','turquoise', 'lightcyan', 'indigo', 'gold', 'maroon', 'navy', 'olive', 'orangered', 'peru', 'powderblue'] ;
+
+    // PCA or T-SNE data
+    var _2ddata;
+    var _3ddata;
+    var _3dlayout;
+    var _2dlayout;
+    
+    // Project settings
+    var _status;
+    var _parameters;
+    var _atlasIds;
+    
+    // Global clustering data
+    var _clusters;
+    var _clustersGenes;
+    var _clustersToColorArray = [];
+    var _selectedCellsArray = {};
+    var _lastclusteringList = [];
+    var _regionTypes = {};
+    
+    // Selected tab
+    var _current_tab_selector;
+    
+    // login system
+    var _accountId = -1;
+    var _projectId = -1;
+    
+    // Timers
+    var _realtimeTimer; 
+
+    /**
+     * Gets the size of an associative array
+     */
+    Object.size = function(obj) {
+        var size = 0, key;
+        for (key in obj) {
+            if (obj.hasOwnProperty(key)) size++;
+        }
+        return size;
+    };
+
+    /**
+     * Array to string function
+     */
+    
+    Array.prototype.toString = function() {
+        return this.join(', ');
+    };
+
+
+    /**
+     * Add functions for Javascript Arrays for IE 10 and IE 11
+     */
+    if (!('fill' in Array.prototype)) {
+        Array.prototype.fill= function(object_to_fill, start, n) {
+            while(this.length < n) {
+                this.push(object_to_fill);
+            }
+        };
+    }
+    
+    if (!('indexOf' in Array.prototype)) {
+        Array.prototype.indexOf= function(find, i /*opt*/) {
+            if (i===undefined) i= 0;
+            if (i<0) i+= this.length;
+            if (i<0) i= 0;
+            for (var n= this.length; i<n; i++)
+                if (i in this && this[i]===find)
+                    return i;
+            return -1;
+        };
+    }
+    if (!('lastIndexOf' in Array.prototype)) {
+        Array.prototype.lastIndexOf= function(find, i /*opt*/) {
+            if (i===undefined) i= this.length-1;
+            if (i<0) i+= this.length;
+            if (i>this.length-1) i= this.length-1;
+            for (i++; i-->0;) /* i++ because from-argument is sadly inclusive */
+                if (i in this && this[i]===find)
+                    return i;
+            return -1;
+        };
+    }
+    if (!('forEach' in Array.prototype)) {
+        Array.prototype.forEach= function(action, that /*opt*/) {
+            for (var i= 0, n= this.length; i<n; i++)
+                if (i in this)
+                    action.call(that, this[i], i, this);
+        };
+    }    
+    /*
+     * Delay function
+     * @type Function|Function
+     */
+    var delay = ( function() {
+        var timer = 0;
+        return function(callback, ms) {
+            clearTimeout (timer);
+            timer = setTimeout(callback, ms);
+        };
+    })();
+
+    /**
+     * Makes the first letter of a string uppercase
+     */
+    function toTitleCase(str)
+    {
+        return str.replace(/\w\S*/g, function(txt){return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();});
+    }
+    
+    function formatString(str)
+    {
+        str = str.replace('kmeans', 'K-Means');
+        str = str.replace('pca', 'PCA');
+        str = str.replace('tsne', 't-SNE');
+        str = str.replace('sc3', 'SC3');
+        str = str.replace('original', 'Norm+Filt');
+        str = str.replace('scde', 'PAGODA');
+        return str;
+    }
+    
+    /**
+     * Used to merge JSON objects together
+     */
+    jQuery.fn.smartJSONextend = function(obj1, obj2) {
+        //clone
+        var mergedObj = JSON.parse(JSON.stringify(obj1));
+
+        (function recurse(currMergedObj, currObj2){
+            var key;
+
+            for (key in currObj2) {
+                if (currObj2.hasOwnProperty( key )){
+
+                    //keep path alive in mergedObj
+                    if (!currMergedObj[key]){
+                        currMergedObj[key] = undefined;
+                    }
+
+                    if ( typeof currObj2[key] === "string" || typeof currObj2[key] === "number" || typeof currObj2[key] === "boolean" ){
+                    //overwrite if obj2 is leaf and not nested
+                        currMergedObj[key] = currObj2[key];
+                    } else if (typeof currObj2[key] === "object"){
+                    //obj2 is nested
+
+                        //and currMergedObj[key] is undefined, sync types
+                        if (!currMergedObj[key]) {
+                            //obj2[key] ifArray
+                            if(currObj2[key].length !== undefined){
+                                currMergedObj[key] = [];
+                            } else {
+                                currMergedObj[key] = {};
+                            }
+                        }
+                        recurse(currMergedObj[key], currObj2[key]);
+                    }
+                }
+            }
+        }(mergedObj, obj2));
+
+        return mergedObj;
+    }   
+
+    /**
+     * Action for button to go to the next step
+     * @param {int} projectId projectId
+     * @param {int} number step number
+     * @param {type} buttonSelector Ladda button
+     */
+    function goToNextStep(number, buttonSelector)
+    {
+        clearInterval(_realtimeTimer);
+        _realtimeTimer = setInterval(function() { updateRealtimeTimer("realtimedata"); }, 1800);
+        
+        // buttonSelector can be empty.
+        buttonSelector = typeof buttonSelector !== 'undefined' ? buttonSelector : 'undefined';
+                
+        var next = parseInt(number) + 1;        
+
+        var tid = setInterval(getProcessLockUpdate, 500);
+        
+        function getProcessLockUpdate() {
+            $.ajax({
+                url: SERVER + "" + _projectId,
+                type: "GET"
+            })
+            .done( function(get_data) {
+                if (get_data['_locked'].length === 0)
+                {
+                    clearInterval(tid);
+                    if(buttonSelector !== 'undefined')
+                        buttonSelector.stop();
+                    setTimeout(function(){
+                        if(next >= STATUS_RESULTS)
+                        {
+                            if(next == STATUS_RESULTS)
+                                showResults(_projectId,0);
+                            else
+                                showResults(_projectId,1);
+                            if(next === STATUS_DE)
+                            {
+                                printDEData();
+                                $('#tab_button_deresults').removeClass("hidden");
+                                $('.nav-tabs a[href="#button_deresults"]').tab('show');
+                                return;
+                            }
+                            next = STATUS_RESULTS;
+                            $('#addjob_3').slideUp(300);
+                        }
+                        else
+                        {
+                            $('#realtime').fadeIn(500);
+                            $('[id^="addjob_"]').slideUp(300);                  
+                        }
+                        $('#status').fadeOut();
+                        $('#preloader').delay(100).fadeOut('slow'); // will fade out the white DIV that covers the website.
+                        $('body').delay(100).css({'overflow':'visible'});
+                                                
+                        var divname = '#addjob_'+next.toString();
+                        if ($(divname).is(":hidden"))
+                            $(divname).slideDown("medium");
+                        changeFilterText();
+                        
+                        ///////////////////
+                        //
+                        // Left Menu Bar
+                        //
+                        ///////////////////
+                        var text_add = "";
+                        var leftbar = "<ul class=\"nav nav-sidebar\">";
+                        leftbar += "<li style=\"padding-left: 20px\"><b>Pipeline overview</b></li>";
+                        leftbar += '<li id="leftbar_2"><a href="#">Filtering';
+                        if(next > 2 && typeof _parameters['filter_type1'] !== 'undefined')
+                            leftbar += " <span style=\"margin-left:5px;\" class=\"badge\">"+toTitleCase(_parameters['filter_type1'])+ "</span> <span style=\"margin-left:3px;\" class=\"badge\">" +_parameters['filter_parameter1']+"%</span>";
+                        leftbar += '</a></li>';
+                        leftbar += '<li id="leftbar_3"><a href="#">Normalization';
+                        if(next > 3 && typeof _parameters['normalization_type'] !== 'undefined')
+                            leftbar += " <span style=\"margin-left:5px;\" class=\"badge\">"+toTitleCase(_parameters['normalization_type'])+"</span>";
+                        leftbar += '</a></li>';                        
+                        leftbar += '<li id="leftbar_4"><a href="#">Results</a></li>';
+                        leftbar += "</ul>";
+                        $('#leftbar').empty(); 
+                        $('#leftbar').append(leftbar);
+                        $('[id^="leftbar_"]').removeClass("active");
+                        $('#leftbar_'+next.toString()).addClass("active");
+                        $('[id^="leftbar_"]').on('click', function (e) {
+                               var number = parseInt($(this).attr("id").split("_").pop());
+                               e.preventDefault();
+                               $.ajax({
+                                    url: SERVER + _projectId + "/status/" + number,            
+                                    async: false,
+                                    type: "PUT"
+                                })
+                                .done( function(data) {
+                                });
+                                $('#leftbar2').empty();
+                               loadPage("page_addjob", 1, _projectId);
+                               goToNextStep(number-1);
+                        });     
+                    }, 200);
+                }
+            });
+        }
+    }
+    /**
+     * Clone a javascript object
+     * @param {type} obj
+     * @returns {unresolved}
+     */
+    function clone(obj) {
+        if (null == obj || "object" != typeof obj) return obj;
+        var copy = obj.constructor();
+        for (var attr in obj) {
+            if (obj.hasOwnProperty(attr)) copy[attr] = obj[attr];
+        }
+        return copy;
+    }
+    
+    function populateRegionTypes()
+    {
+        var inc = 0;
+        $.each(_regionTypes, function (i, item) {
+            if( $('.enrichment_type').has('option').length > inc+1 )
+                return;
+
+            $('.enrichment_type').append($('<option>', { 
+                value: inc,
+                text : item['_name']
+            }));
+            inc = inc +1;
+        });
+        $(".enrichment_type option:first").attr('selected','selected');
+    }
+    
+    function loadRegionTypes()
+    {
+        // Load enrichment types
+        $.ajax({
+             url: SERVER + _projectId + "/regiontypes",
+             type:"GET"
+        }).done( function(data) {
+            _regionTypes = data;
+        });
+    }
+    
+    /**
+     * Prints differential expression data
+     */
+    function printDEData()
+    {
+        var projectId = document.getElementById("project_id").value;
+        var filename = UPLOAD + projectId + "/" + DE_JSON_FILENAME;
+        
+        $('#enrichment_results').hide();
+        if(typeof _parameters['de_type'] !== 'undefined')
+            $("#tab_button_deresults").html("DE Results <span style=\"margin-left:5px;\" class=\"badge\">"+toTitleCase(_parameters['de_type'])+"</span>");
+        
+        $.ajax({
+            url: filename,
+            type: "GET"
+          }).done(function(data) {
+            data = JSON.parse(data);
+            var rv = [];
+            for (var i = 0; i < data[Object.keys(data)[0]].length; ++i)
+            {
+                  rv[i] = [];
+                  var j = 0;
+                  for (var name in data)
+                  {
+                      
+                          rv[i][j] = data[name][i];
+                          j++;
+                  }
+            }
+            
+            function _round(num)
+            {
+               return Math.round(num * 10000000) / 10000000; 
+            }
+            
+            var inputData = rv;      
+            var maxScore = 0;     
+            $.extend( $.fn.dataTableExt.oStdClasses, {
+                "sFilterInput": "form-control noblock",
+                "sLengthSelect": "form-control noblock"
+            });
+            if ( $.fn.dataTable.isDataTable( '#de_results_table' ) ) {
+                var datatable = $('#de_results_table').dataTable().api();
+                datatable.clear();
+                datatable.rows.add(inputData);
+                datatable.draw();
+            }
+            else {
+
+                $('#de_results_table').DataTable( {
+                    data: inputData,
+                    /*"columns": [
+                      { "width": "20%" },
+                      { "width": "20%" },
+                      { "width": "20%" },
+                      { "width": "20%" },
+                      { "width": "20%" },         
+                    ],*/
+                    "order": [[ 0, "desc" ]],
+                    "columnDefs": [
+                        {
+                            "targets": [0,3,4],
+                            "render": function ( data, type, full, meta ) {
+                                return _round(data);
+                            }
+                        },
+                        /*{
+                            "targets": [3,4],
+                            "render": function ( data, type, full, meta ) {
+                                return data.toExponential();
+                            }
+                        },*/
+                        {
+                            "targets": [5],
+                            "render": function ( data, type, full, meta ) {
+                                return '<span class="geneTooltip">'+data+'</span>';
+                            }
+                        },
+                         {
+                            "targets": -1,
+                            "data": null,
+                            "defaultContent": "Score",
+                            "render" : function ( data, type, row ) {
+                                if (maxScore === 0)
+                                {
+                                    maxScore = row[0];
+                                }
+                                var score = Math.round(row[0]*100/maxScore);
+                                if (score < 0)
+                                    score = 0;
+                                var progressbar = '<div class="progress" style="margin-bottom:0px"><div class="progress-bar" role="progressbar" aria-valuenow="'+score+'" aria-valuemin="0" aria-valuemax="100" style="width: '+score+'%;"></div></div>';
+                                return progressbar;
+                            }
+                        },
+                    ],
+                    select: true,
+                    "fnDrawCallback": function ( oSettings ) {
+                        $('.geneTooltip').mouseenter(function() {
+                            var e=$(this);
+                            var geneName = e.html();
+                            e.off('hover');
+                            $('[data-toggle=popover]').not(this).popover('hide');
+                            $.getJSON(SERVER+projectId+"/regionbygene/"+geneName, {_: new Date().getTime()}, function(data) 
+                            {
+                                var d = data[geneName];
+                                var htmltoadd = "";
+                                for(v in d)
+                                {
+                                    htmltoadd += "<b>"+v + ": </b>";
+                                    for(el in d[v])
+                                    {
+                                        htmltoadd += el+ ", ";
+                                    }
+                                    htmltoadd = htmltoadd.substring(0, htmltoadd.length - 2);
+                                    htmltoadd +="<br />";
+                                }
+                                e.popover({html : true, content:htmltoadd}).popover('show');
+
+                            });
+                        }).mouseout(function() {
+                            $('.geneTooltip').popover('hide');
+                        }).mouseleave(function() {
+                            $('.geneTooltip').popover('hide');
+                        });            
+                    },
+                    dom: 'Bfrtip',
+                    buttons: [
+                    'colvis',
+                    {
+                        extend: 'excel',
+                        text: 'Export excel',
+                        exportOptions: {
+                            columns: ':visible'
+                        }
+                    },
+                    {
+                        extend: 'csv',
+                        text: 'Export all',
+                        fieldBoundary:'',
+                        exportOptions: {
+                            columns: ':visible'
+                        }
+                    },     
+                    {
+                        extend: 'csv',
+                        text: 'Export selected',
+                        fieldBoundary:'',
+                        exportOptions: {
+                            columns: ':visible',
+                            modifier: {
+                                selected: true
+                            }
+                        }
+                    }             
+                    ],
+                    colReorder: {
+                        realtime: false
+                    }     
+                } );                
+            }
+          });
+          
+        $('#load_enrichment').on("click", function(e) {
+            e.preventDefault();
+            launchEnrichment();
+        });
+        
+        $('#de_results').show();
+        
+    }
+   
+    function changeClusteringTypeText()
+    {
+        if ($("#clustering_type").val() === "kmeans" )
+        { 
+            $("#clustering_parameter1").attr('placeholder',"Number of clusters");
+            $("#clustering_parameter1_label").html("Number of clusters");
+            $("#clustering_parameter1_label").show();
+            $("#clustering_parameter2_label").hide();
+            $("#clustering_parameter1").attr('data-original-title',"Set the number of clusters. You can also choose a range of cluster numbers (ex: 2:10) for silhouette analysis.");
+            $("#clustering_parameter1").show();
+            $("#clustering_parameter2").hide();
+        }
+        if ($("#clustering_type").val() === "sc3" )
+        { 
+            $("#clustering_parameter1").attr('placeholder',"Number of clusters");
+            $("#clustering_parameter1_label").html("Number of clusters");
+            $("#clustering_parameter1_label").show();
+            $("#clustering_parameter2_label").hide();
+            $("#clustering_parameter1").attr('data-original-title',"Set the number of clusters.");
+            $("#clustering_parameter1").show();
+            $("#clustering_parameter2").hide(); 
+            $(".no_sc3").prop("disabled",true);
+            $('#clustering_dataset').val("original");
+        }           
+        else
+        {
+            $(".no_sc3").prop("disabled",false);
+        }
+        if ($("#clustering_type").val() === "em" || $("#clustering_type").val() === "meanshift")
+        { 
+            $("#clustering_parameter1").attr('placeholder',"Number of PCs");
+            $("#clustering_parameter1").attr('data-original-title',"The algorithm works on a subset of principal components. Example : 5");
+            $("#clustering_parameter1_label").html("Number of PCs");
+            $("#clustering_parameter1_label").show();
+            $("#clustering_parameter2_label").hide();                    
+            $("#clustering_parameter1").show();
+            $("#clustering_parameter2").hide();
+        }
+    }
+    
+    /**
+     * Visualization master page. 
+     * @param {type} projectId
+     */
+    function showResults(projectId, addNewClustering)
+    {
+        $('#2d_pca_selection_panel').hide();
+        $('#2d_pca_clusters_panel').hide();
+        _selectedCellsArray = {};
+        $('#realtime').hide();
+        updateRealtimeTimer("stats",projectId);
+            
+        if(!$("#project_id").empty());
+            loadRegionTypes();
+
+        ///////////////////
+        //
+        // Left Menu Bar
+        //
+        ///////////////////
+        var is_zifa_disabled = "";
+        if(typeof _status != 'undefined')
+        {
+            if(_status['_status']['is_count_table'] == false)
+            {
+                is_zifa_disabled = "disabled";
+            }
+        }
+        
+        var leftbar ="";
+        leftbar += '<div id="panel_buttons_results" class="tab-pane fade in active">';        
+        leftbar += '    <div class="panel panel-default">';
+        leftbar += '         <div class="panel-heading">';       
+        leftbar += '            Clustering';        
+        leftbar += '         </div>';        
+        leftbar += '         <div class="panel-body">';        
+        leftbar += "        <form id=\"form_"+STATUS_RESULTS+"\">";
+        leftbar += "        <label for=\"clustering_type\">Clustering options</label>";
+        leftbar += '        <select name="clustering_type" id="clustering_type" class="form-control" style="margin-bottom:0.5em;">';
+        leftbar += '            <option value="kmeans">K-Means</option>';
+        leftbar += '            <option value="em">Gaussian Mixtures Model</option>';
+        leftbar += '            <option value="meanshift">Mean Shift</option>'; 
+        leftbar += '            <option value="sc3">SC3 (for single-cell)</option>';
+        leftbar += '            <!--<option value="birch">BIRCH</option>-->';
+        leftbar += '        </select>';
+        leftbar += '        on';
+        leftbar += '        <select name="clustering_dataset" id="clustering_dataset" class="form-control" style="margin-top:5px; margin-bottom:0.5em">';
+        leftbar += '            <option value="input">Input data</option>';        
+        leftbar += '            <option value="original">Normalized+Filtered data</option>';
+        leftbar += '            <option class="no_sc3" value="pca" selected>PCA data</option>';
+        leftbar += '            <option class="no_sc3" value="tsne">t-SNE data</option>';
+        leftbar += '        </select>';
+        leftbar += '    <label id="clustering_parameter1_label" for="clustering_parameter1">Number of clusters</label><input autocomplete="off" name="clustering_parameter1" class="form-control" style="margin-bottom:0.5em" id="clustering_parameter1" data-toggle="tooltip" title="Set the number of clusters. You can also choose a range of cluster numbers (ex: 2:10) for silhouette analysis." value="4">';
+        leftbar += '    <label id="clustering_parameter2_label" for="clustering_parameter2">Parameter 2</label><input autocomplete="off" name="clustering_parameter2" class="form-control" style="margin-bottom:0.5em" id="clustering_parameter2" value="3">';
+        leftbar += '    <button id="next_'+STATUS_RESULTS+'" type="submit" class="btn btn-primary ladda-button" data-style="slide-right"><span class="ladda-label">Apply</span></button>';
+        leftbar += "    </form>";
+        leftbar += '    <hr><div class = "btn-group">\n\
+                            <button id="show_last_clustering" class="btn btn-primary dropdown-toggle" data-toggle = "dropdown">Last clusterings <span class = "caret"></span></button>\n\
+                            <ul id ="last_clusterings_list" class = "dropdown-menu" role = "menu">\n\
+                            </ul>\n\
+                        </div>';        
+        leftbar += '         </div>';
+        leftbar += '     </div>';        
+        leftbar += '</div>';
+        leftbar += '<div id="panel_buttons_results" class="tab-pane fade in active">';
+        leftbar += '    <div class="panel panel-default">';
+        leftbar += '         <div class="panel-heading">';       
+        leftbar += '            Visualisation tools';        
+        leftbar += '         </div>';          
+        leftbar += '         <div class="panel-body">';
+        leftbar += '             <b>Dimensionality Reduction</b>';
+        leftbar += '             <div style="margin-top:5px" class="btn-group btn-group-justified">';
+        leftbar += '                <a href="#" id="launch_2dpca" data-style="slide-right" class="ladda-button btn btn-primary">2D PCA</a>';
+        leftbar += '                <a href="#" id="launch_3dpca" data-style="slide-right" class="btn btn-primary ladda-button">3D PCA</a>';
+        leftbar += '             </div><br />';
+        leftbar += '             <div class="btn-group btn-group-justified">';
+        leftbar += '                <a href="#" id="launch_tsne" data-style="slide-right" class="btn btn-primary ladda-button">2D t-SNE</a>';
+        leftbar += '                <a href="#" id="launch_3dtsne" data-style="slide-right" class="btn btn-primary ladda-button">3D t-SNE</a>';
+        leftbar += '             </div><br />';     
+        leftbar += '             <div class="btn-group btn-group-justified">';
+        leftbar += '                <a href="#" id="launch_zifa" data-style="slide-right" title="ZIFA can only work with count tables input." class="zifa btn btn-primary ladda-button '+is_zifa_disabled+'">2D ZIFA</a>';
+        leftbar += '                <a href="#" id="launch_3dzifa" data-style="slide-right" title="ZIFA can only work with count tables input." class="zifa btn btn-primary ladda-button '+is_zifa_disabled+'">3D ZIFA</a>';
+        leftbar += '             </div>';          
+        if(is_zifa_disabled === "disabled")
+            leftbar += '<div id="zifa_text">Zifa only works with count table input</div>';
+        leftbar += '             <hr style="margin-bottom:10px;"><b>Clustering</b>';
+        leftbar += '             <div style="margin-top:5px" class="btn-group btn-group-justified">';
+        leftbar += '                <a href="#" id="launch_hclust" data-style="slide-right" class="btn btn-primary ladda-button">Hierarchical Clustering</a>';
+        leftbar += '             </div>';
+        leftbar += '         </div>';
+        leftbar += '     </div>';
+        leftbar += '</div>';        
+        $('#clustering_left').remove();
+        $('#leftbar2').html(leftbar);
+        fillFormFromAjax();
+        
+         // JOB Clustering button
+         $('[id^="form_"]').on('submit', function (e) {
+             e.preventDefault();
+             var number = $(this).attr("id").split("_").pop();
+             
+             // Save last clustering in client
+             $.ajax({
+                 //Set status
+                  url: SERVER + _projectId + "/status/"+number,            
+                  type: "PUT",
+                  async: false
+              })
+              .done( function(data) {
+                  next(number);
+              });                
+             
+         });
+        $('[data-toggle="tooltip"]').tooltip({
+          container : 'body'
+        });
+         $("#clustering_parameter2").hide();
+         $("#clustering_parameter2_label").hide();
+
+         $("#clustering_type").on("click", function(e) {
+             e.preventDefault();
+             changeClusteringTypeText();
+         });
+        
+        /**
+         * Outputs the 3D graph
+         * @returns {undefined}
+         */
+       function print3DPCA()
+       {
+            ///////////////////
+            //
+            // PCA 3D plot
+            //
+            ///////////////////
+             _3ddata['mode'] = "markers+text";
+             _3ddata['type'] = "scatter3d";
+             _3ddata['marker'] = {
+                      color: 'rgb(23, 190, 207)',
+                      size: 3
+             };
+            if (typeof _marker != 'undefined')
+            {
+                _3ddata['marker'] = _marker;
+                _3ddata['marker']['size'] = 3;
+            }       
+            _3dlayout = {
+                 margin: { t: 0 },
+                 scene: {
+                     aspectratio: {
+                         x: 1,
+                         y: 1,
+                         z: 1
+                     },
+                     camera: {
+                         center: {
+                             x: 0,
+                             y: 0,
+                             z: 0
+                         },
+                         eye: {
+                             x: 1.25,
+                             y: 1.25,
+                             z: 1.25
+                         },
+                         up: {
+                             x: 0,
+                             y: 0,
+                             z: 1
+                         }
+                     },
+                     xaxis: {
+                         type: 'linear',
+                         title: 'Dim. 1',
+                         zeroline: false
+                     },
+                     yaxis: {
+                         type: 'linear',
+                         title: 'Dim. 2',
+                         zeroline: false
+                     },
+                     zaxis: {
+                         type: 'linear',
+                         title: 'Dim. 3',
+                         zeroline: false
+                     }
+                 },
+                 legend: {
+                   y: 0.5,
+                   yref: 'paper',
+                   font: {
+                     family: 'Arial, sans-serif',
+                     size: 20,
+                     color: 'grey',
+                   }
+                 },
+                     title:'PCA 3D plot'
+                };
+
+             $('#pca3d_togglenames').on('click', function (e) {
+                 if(e.handled !== true) // This will prevent event triggering more then once
+                 {
+                     e.preventDefault();
+                     if(_3ddata['mode'] === 'markers')
+                         _3ddata['mode'] = "markers+text";       
+                     else
+                         _3ddata['mode'] = "markers";
+
+                     setTimeout(function(){
+                        var plotDiv = document.getElementById('3d_pca_graph');
+                        plotDiv.data[0].mode = _3ddata['mode'];
+                        Plotly.redraw(plotDiv);
+                     }, 100);
+
+                     e.handled = true;
+                 }
+             });
+             $('#pca3d_togglelog').on('click', function (e) {
+                if(e.handled !== true) // This will prevent event triggering more then once
+                {
+                    e.preventDefault();
+
+                    if(_3dlayout['xaxis']['type'] === 'linear')
+                    {
+                    	_3dlayout['xaxis']['type'] = 'log';
+                    	_3dlayout['yaxis']['type'] = 'log';
+                    }
+                    else
+                    {
+                    	_3dlayout['xaxis']['type'] = 'linear';
+                    	_3dlayout['yaxis']['type'] = 'linear';                    	
+                    }
+                    
+                    setTimeout(function(){
+                        var plotDiv = document.getElementById('3d_pca_graph');
+                        Plotly.relayout(plotDiv, _3dlayout);
+                    }, 100);
+                    
+                    e.handled = true;
+                }
+            });   
+            Plotly.newPlot('3d_pca_graph', [_3ddata], _3dlayout, {showLink: false, displaylogo: false, displayModeBar: true});
+            printGeneList('3d');
+            printRegionList('3d');
+        }        
+        
+        /**
+         * Contextual menu when somebody clicks on a cell name
+         * @param {type} clusters cluster array
+         */
+        function printCellContextualMenu(clusters)
+        {
+            var menuItems = {};
+            for (res in _clusters)
+            {
+                if(!isNaN(parseFloat(res)))
+                 menuItems["addtocluster_"+res] = {name: "Add to cluster "+res, icon: "edit"};
+            }
+            menuItems["removefromcluster"] = {name: "Remove from cluster", icon: "delete"};
+            menuItems["deletecell"] = {name: "Delete cell from dataset", icon: "delete"};
+            menuItems["sep1"] =  "---------";
+            menuItems["quit"] = {name: "Exit", icon: function(){
+                         return 'context-menu-icon context-menu-icon-quit';
+                     }};
+             $.contextMenu( 'destroy' );
+             $.contextMenu({
+                 selector: '.geneContextMenu', 
+                 callback: function(key, options) {
+                     var cellName = $(this).html();
+                     if(key === 'removefromcluster')
+                     {
+                         setCellCluster(cellName,-1);
+                         updateClusteringData(false);  
+                     }
+                     if(key === 'deletecell')
+                     {
+                         deleteCell(cellName);
+                         $("#view_list_tab").find('li').each(function(){
+                            var current = $(this).find( "a" );
+                            current.addClass("hidden");
+                        });
+                            _current_tab_selector = "tab_button_stats";
+                            $("#"+_current_tab_selector).tab('show');                   
+                            $(".neverhidden").removeClass("hidden");
+                            updateClusteringData(false);
+                     }
+                     if(key.indexOf('addtocluster') > -1)
+                     {
+                         var clusterId = key.split("_").pop();
+                         setCellCluster(cellName,clusterId);
+                         updateClusteringData(false);  
+                     }
+                     printSelectionArray();
+                 },
+                 items:menuItems
+             });
+         }      
+         
+         function printPanels(is3d)
+         {
+             printGenePanel(is3d);
+             printClustersPanel(is3d);
+         }
+         
+         function printGenePanel(is3d)
+         {
+            var divcontent = '';
+            divcontent +='            <div style="margin-top: 15px" id="2d_pca_genelist_panel" class="panel panel-default">';
+            divcontent +='                <div class="panel-heading">Gene expression</div>';
+            divcontent +='                <div class="panel-body">';
+            divcontent +='                    <div id="2d_pca_genelist" class="form-group form-inline">';
+            divcontent +='                        <div style=""><b>Gene expression</b></div>';            
+            divcontent +='                        ';
+            divcontent +='                            <input autocomplete="off" style="width:51%;" id="genelist_input2d" class="form-control" type="text" data-provide="typeahead" placeholder="Gene name"> ';
+            divcontent +='                            <button id="genelist_showexpression2d" style="width:47%;" type="button" class="btn btn-primary">Show Gene Expression</button>';
+            divcontent +='                        ';
+            divcontent +='                        <div style="padding-top:1em;"><b>Enrichment gene set expression</b></div>';            
+            divcontent +='                        ';
+            divcontent +='                            <select class="form-control enrichment_type" id="regionlist_regiontypeid" style="width:44%"></select>';
+            divcontent +='                            <input autocomplete="off" style="width:38%;" id="regionlist_input2d" class="form-control" type="text" placeholder="Region name"> ';
+            divcontent +='                            <button id="regionlist_showexpression2d" style="width:14%;" type="button" class="btn btn-primary">Show</button>';
+            divcontent +='                                                            ';
+            divcontent +='                        <div id="geneListRegions" style="margin-top:1em;max-height:5em;overflow:auto;"></div>';
+            divcontent +='                        <div style="padding-top:1em;"><b>Expression scale</b></div>';
+            divcontent +='                        <div id="geneExprGradient" class="img-rounded geneExprGradient"><span class="geneExprMin black_text">0</span><span class="geneExprMax white_text">1</span></div>';
+            divcontent +='                    </div>';
+            divcontent +='                </div>';
+            divcontent +='            </div>       ';
+            if(is3d === 0)
+            {
+                $("#gene_panel_3d").empty();
+                $("#gene_panel_2d").html(divcontent);
+            }
+            if(is3d === 1)
+            {
+                $("#gene_panel_2d").empty();
+                $("#gene_panel_3d").html(divcontent);                
+            }            
+            populateRegionTypes();
+         }
+         
+         function printClustersPanel(is3d)
+         {
+            var divcontent = '';
+            divcontent +='            <div id="2d_pca_clusters_panel" class="panel panel-default">';
+            divcontent +='                <div id="clusters_panel_title" class="panel-heading">Clusters</div>';
+            divcontent +='                <div class="panel-body">';
+            divcontent +='                    <div id="2d_pca_clusters" style="max-height:28em;overflow:auto;"></div>';
+            divcontent +='                </div>';
+            divcontent +='            </div>';
+            divcontent +='            <div id="2d_pca_selection_panel" class="panel panel-default" >';
+            divcontent +='                <div class="panel-heading">Selection</div>';
+            divcontent +='                <div class="panel-body">';
+            divcontent +='                    <div id="2d_pca_selection" style="max-height:28em;overflow:auto;"></div>';
+            divcontent +='                    <div id="2d_pca_selection_buttons" style=""></div>';
+            divcontent +='                </div>';
+            divcontent +='            </div>             ';
+            if(is3d === 0)
+            {
+                $("#clusters_panel_3d").empty();
+                $("#clusters_panel_2d").html(divcontent);
+            }
+            if(is3d === 1)
+            {
+                $("#clusters_panel_2d").empty();
+                $("#clusters_panel_3d").html(divcontent);                
+            }
+         }
+         
+         function printSelectionLine(text)
+          {
+              text = text.split('.').join('-');
+              $('#2d_pca_selection').append("<div style=\"vertical-align: middle;height: 2em;\"><span style=\"float:left;\"><span class=\"geneContextMenu\">" + text +"</span> \n\
+                                            <span style=\"\" class=\"badge\">Cluster "+ _clustersGenes[text]+ "</span></span>\n\
+                                            <span style=\"float:right\"><a class=\"btn btn-primary btn-xs\" id=\"removeselection_"+ text +"\">Deselect</a> \n\
+                                            <a class=\"btn btn-primary btn-xs\" id=\"removeCluster_"+ text +"\">Remove from cluster</a></span></div>");
+          }
+
+          function printSelectionArray()
+          {
+              $('#2d_pca_selection').empty();
+              for (geneii in _selectedCellsArray)
+                  printSelectionLine(_selectedCellsArray[geneii]);
+
+              $('[id^="removeselection_"]').on('click', function (e) {
+                   e.preventDefault();
+                   var geneID = $(this).attr("id").split("_").pop();
+                   delete _selectedCellsArray[geneID];
+                    var arrayOfExceptions = [];
+                    _2ddata['text'].forEach(function(pt, idx) {
+                        pt = pt.replace(/\./g, "-");
+                        if(pt in _selectedCellsArray)
+                        {
+                            arrayOfExceptions.push('black');
+                        }
+                        else
+                            arrayOfExceptions.push('rgba(0,0,0,0.1)');
+                    });
+                    var plotDiv = document.getElementById('2d_pca_graph');
+                    var plotDiv3d = document.getElementById('3d_pca_graph');
+                    if(typeof _2ddata != 'undefined')
+                    {
+                        plotDiv.data[0].marker.color = arrayOfExceptions;
+                        Plotly.redraw(plotDiv);                   
+                    }
+                    if(typeof _3ddata != 'undefined')
+                    {
+                        plotDiv3d.data[0].marker.color = arrayOfExceptions;
+                        Plotly.redraw(plotDiv3d);                   
+                    }                    
+                   printSelectionArray();
+              });
+
+              $('[id^="removeCluster_"]').on('click', function (e) {
+                   e.preventDefault();
+                   var geneID = $(this).attr("id").split("_").pop();
+                   setCellCluster(geneID,-1);
+                   updateClusteringData(false);
+                   printSelectionArray();
+              });                           
+          }
+
+          function printSelectionButtons()
+          {
+               $('#2d_pca_selection_buttons').empty();
+               var toAdd = "<div style=\"margin-top:1em;display:inline-block\"><button style=\"\" class=\"btn ladda-button btn-sm\" id=\"unselectAllCells\">Deselect all</button>";
+               toAdd += '<h5 style="margin-top:1em"><b>Differential Expression Analysis</b></h5>';  
+               toAdd += '<form id="form_'+STATUS_CLUSTERED+'"><label for="de_param1">DE alpha-value : </label><input name="de_param1" class="form-control" id="de_param1" value="0.05" style="width:60px; display:inline; margin: 0em 1em 0.5em 0.5em">';
+               toAdd += '<label for="de_type">DE Type : </label><select style="width:160px; display:inline; margin: 0em 0.5em 0.3em 0.3em" class="form-control" name="de_type" id="de_type"><option value="limma">Limma (fast)</option><option value="deseq2">DESeq2 (slow)</option><option value="edger">edgeR (medium)</option><option class="count_table_only" value="scde">SCDE (very slow)</option></select> ';
+               toAdd += '<label for="de_param2">DE log2 cutoff : </label><input name="de_param2" class="form-control" id="de_param2" value="2" style="width:60px; display:inline; margin: 0em 1em 0.5em 0.5em"></form>';
+               toAdd += "<br /><button style=\"\" class=\"btn ladda-button btn-primary btn-sm\" data-style=\"slide-right\" type=\"submit\" id=\"next_"+STATUS_CLUSTERED+"\">Differential Expression Analysis</button>";
+               toAdd += "</div>";
+               $('#2d_pca_selection_buttons').append(toAdd);
+               $('#2d_pca_selection_panel').show(500);   
+               $('#unselectAllCells').on('click', function (e) {
+                   e.preventDefault();
+                   _selectedCellsArray = {};
+                    var plotDiv = document.getElementById('2d_pca_graph');
+                    var plotDiv3d = document.getElementById('3d_pca_graph');
+                    if(typeof _2ddata != 'undefined')
+                    {
+                        plotDiv.data[0].marker.color = _clustersToColorArray;
+                        Plotly.redraw(plotDiv);                   
+                    }
+                    if(typeof _3ddata != 'undefined')
+                    {
+                        plotDiv3d.data[0].marker.color = _clustersToColorArray;
+                        Plotly.redraw(plotDiv3d);                   
+                    }      
+                    
+                   $('#2d_pca_selection_panel').hide(500);                   
+                   $('#2d_pca_selection').empty();
+               });
+
+                $('#next_'+STATUS_CLUSTERED).on('click', function (e) {
+                   e.preventDefault();
+                   launchDifferentialAnalysis(_selectedCellsArray);
+               });                 
+          }
+          
+        function printGeneList(is2d)
+        {
+            var dim = '2d';
+            if (is2d == '3d')
+                dim = '3d';
+            
+            $('#genelist_showclusters2d').on('click', function (e) {
+                if(e.handled !== true) // This will prevent event triggering more then once
+                {
+                    e.preventDefault();
+                    var plotDiv = document.getElementById(dim+'_pca_graph');
+                    plotDiv.data[0].marker.color = _clustersToColorArray;
+                    Plotly.redraw(plotDiv);
+                    e.handled = true;
+                }
+            });                        
+
+           $.get(SERVER+_projectId+"/genes", function(data){
+                $("#genelist_input2d").typeahead({ source:data });
+                $('#genelist_showexpression2d').on('click', function (e) {
+                    if(e.handled !== true) // This will prevent event triggering more then once
+                    {
+                        var geneName = $("#genelist_input2d").val();
+                        e.preventDefault();
+                        $.get(SERVER+_projectId+'/gene/'+geneName, function(values){
+                            var normalized_values = [];
+                            var normalized_colors = [];
+                            var min = 999999.0;
+                            var max = -999999.0;
+                            for (var i in values)
+                            {
+                                var num = parseFloat(values[i]);
+                                if (num < min)
+                                    min = num;
+                                if (num > max)
+                                    max = num;
+                            }
+                            for (var i in values)
+                            {
+                                var num = parseFloat(values[i]);
+                                var newvalue = (num - min)/(max - min);
+                                normalized_values.push(newvalue);
+                                normalized_colors.push("rgba(255,0,0,"+newvalue+")");
+                            }
+                            $('.geneExprMin').html(Math.round(min*100)/100);
+                            $('.geneExprMax').html(Math.round(max*100)/100);
+                            var plotDiv = document.getElementById(dim+'_pca_graph');
+                            plotDiv.data[0].marker.color = normalized_colors;
+                            if (typeof plotDiv.data[0].marker.line != 'undefined')
+                            {
+                                plotDiv.data[0].marker.line.color = "rgba(0,0,0,0.8)";
+                                plotDiv.data[0].marker.line.width = 1;       
+                            }
+                            Plotly.redraw(plotDiv);
+                            if ('_errorType' in values)
+                                log.log("gene not found");
+                        });
+                        e.handled = true;
+                    }
+                });                    
+
+            },'json');
+        }
+        
+        function printRegionList(is2d)
+        {
+            var dim = '2d';
+            if (is2d == '3d')
+                dim = '3d';
+           //@TODO : make change of regiontypeid dynamic (event select on change)
+           var regiontypeid =  _regionTypes[Object.keys(_regionTypes)[0]]._id;
+           log.log("regiontypeid on load=");
+           log.log(regiontypeid);           
+           getRegionsByType();
+           
+           $("#regionlist_regiontypeid").on('change', function (e) {
+                var optionSelected = $("option:selected", this);
+                regiontypeid = optionSelected.val();
+                log.log("regiontypeid on change=");
+                log.log(regiontypeid);
+                getRegionsByType();
+            });
+            
+            function getRegionsByType()
+            {
+                $.get(SERVER+_projectId+'/region/'+regiontypeid, function(data){
+                     str = JSON.stringify(data);
+                     str = str.replace(/_name/g, "name");
+                     var converted  = JSON.parse(str);
+                     data_table = []
+                     for(key in converted) data_table.push(converted[key]);
+                     $('#regionlist_input2d').typeahead('destroy');
+                     $("#regionlist_input2d").typeahead({ source:data_table });
+
+                     $('#regionlist_showexpression2d').on('click', function (e) {
+                         if(e.handled !== true)
+                         {
+                             var regionid = $("#regionlist_input2d").typeahead("getActive")._regionId;
+                             var optionSelected = $("#regionlist_regiontypeid option:selected");
+                             regiontypeid = optionSelected.val();                             
+                             e.preventDefault();
+                             $.get(SERVER+_projectId+'/region/'+regiontypeid+'/'+regionid, function(res){
+                                 log.log(values);
+                                 var values = res['values'];
+                                 var normalized_values = [];
+                                 var normalized_colors = [];
+                                 var min = 999999.0;
+                                 var max = -999999.0;
+                                 for (var i in values)
+                                 {
+                                     var num = parseFloat(values[i]);
+                                     if(num < min)
+                                         min = num;
+                                     if (num > max)
+                                         max = num;
+                                 }
+
+                                 for (var i in values)
+                                 {
+                                     var num = parseFloat(values[i]);
+                                     var newvalue = (num - min)/(max - min);
+                                     normalized_values.push(newvalue);
+                                     normalized_colors.push("rgba(255,0,0,"+newvalue+")");
+                                 }
+                                 $('.geneExprMin').html(Math.round(min*100)/100);
+                                 $('.geneExprMax').html(Math.round(max*100)/100);
+                                 var plotDiv = document.getElementById(dim+'_pca_graph');
+                                 plotDiv.data[0].marker.color = normalized_colors;
+                                 plotDiv.data[0].marker.line.color = "rgba(0,0,0,0.8)";
+                                 plotDiv.data[0].marker.line.width = 1;       
+                                 Plotly.redraw(plotDiv);
+                                 
+                                 var matchlist = res['genes'];
+                                 var toAdd = '';
+                                 for (var gene in matchlist)
+                                 {
+                                     toAdd += matchlist[gene];
+                                     if(gene < matchlist.length -1)
+                                         toAdd += ", ";
+                                     
+                                 }     
+                                 $('#geneListRegions').empty();
+                                 if ('_errorType' in values)
+                                 {
+                                     log.log("Region not found");
+                                     $('.geneExprMin').html("Region not found.");
+                                 }
+                                 else
+                                     $('#geneListRegions').html(toAdd);
+                             });
+                             e.handled = true;
+                         }
+                     });                    
+
+                 },'json');
+            }
+        }        
+        /**
+         * Output the 2D graph page. The same script is used for both t-SNE and PCA. Only _2ddata changes
+         */
+        function print2DPCA()
+        {
+           ///////////////////
+           //
+           // PCA 2D plot
+           // https://plot.ly/javascript/reference/#scatter
+           ///////////////////
+           
+           _2ddata['mode'] = "markers+text";
+           _2ddata['type'] = "scatter";
+           var PCAGraph2d = document.getElementById('2d_pca_graph');
+           
+           _2ddata['marker'] = {size: 9};
+            if (typeof _marker != 'undefined')
+            {
+                _2ddata['marker'] = clone(_marker);
+                _2ddata['marker']['size'] = 8;
+            }
+           _2ddata['textposition'] = 'bottom center';
+           
+           _2dlayout = {
+            xaxis: {title: 'Dimension 1', type:'linear'},
+            yaxis: {title: 'Dimension 2', type:'linear'},
+            hovermode: 'closest',
+            dragmode:'pan',
+            margin: { t: 0 },        
+            legend: {
+              y:0.8,
+              yref: 'paper',
+              font: {
+                family: 'Arial, sans-serif',
+                size: 20,
+                color: 'grey',
+              }
+            },
+                title:'PCA 2D plot'
+              };
+       
+
+           /**
+            * Updates 2D graph with events and new data.
+            */
+           function update2Dgraph()
+           {
+                if (typeof _marker != 'undefined')
+                {
+                    _2ddata['marker'] = clone(_marker);
+                    _2ddata['marker']['size'] = 8; 
+               }      
+               
+               PCAGraph2d.on('plotly_selected', function(eventData) {
+                    $('#2d_pca_selection_buttons').empty();
+
+                    eventData.points.forEach(function(pt) {
+                        _2ddata.text[pt.pointNumber] = _2ddata.text[pt.pointNumber].split('.').join('-');
+                        if(!(_2ddata.text[pt.pointNumber] in _selectedCellsArray))
+                        {
+                            _selectedCellsArray[_2ddata.text[pt.pointNumber]] = _2ddata.text[pt.pointNumber];
+                        }
+                    });
+
+                    reDrawMapArraySelection();
+
+                    printSelectionArray();
+                    printSelectionButtons();
+             });
+             
+            $('#pca2d_png').on('click', function (e) {
+                if(e.handled !== true) // This will prevent event triggering more then once
+                {
+                    e.preventDefault();
+                    var plotDiv = document.getElementById('2d_pca_graph');
+                    Plotly.downloadImage(plotDiv, {
+                        filename: 'singlecell-viz',
+                        format: 'png', //also can use 'jpeg', 'webp', 'svg'
+                        height: 800,
+                        width: 800
+                    });
+                    e.handled = true;
+                }
+            });
+            $('#pca2d_svg').on('click', function (e) {
+                if(e.handled !== true) // This will prevent event triggering more then once
+                {
+                    e.preventDefault();
+                    var plotDiv = document.getElementById('2d_pca_graph');
+                    Plotly.downloadImage(plotDiv, {
+                        filename: 'singlecellviz',
+                        format: 'svg', //also can use 'jpeg', 'webp', 'svg'
+                        //height: 800,
+                        //width: 800
+                    });
+                   
+                    e.handled = true;
+                }
+            });
+            $('#pca2d_togglelog').on('click', function (e) {
+                if(e.handled !== true) // This will prevent event triggering more then once
+                {
+                    e.preventDefault();
+
+                    if(_2dlayout['xaxis']['type'] === 'linear')
+                    {
+                    	_2dlayout['xaxis']['type'] = 'log';
+                    	_2dlayout['yaxis']['type'] = 'log';
+                    }
+                    else
+                    {
+                    	_2dlayout['xaxis']['type'] = 'linear';
+                    	_2dlayout['yaxis']['type'] = 'linear';                    	
+                    }
+                    
+                    setTimeout(function(){
+                        var plotDiv = document.getElementById('2d_pca_graph');
+                        Plotly.relayout(plotDiv, _2dlayout);
+                    }, 100);
+                    
+                    e.handled = true;
+                }
+            });            
+            $('#pca2d_togglenames').on('click', function (e) {
+                if(e.handled !== true) // This will prevent event triggering more then once
+                {
+                    e.preventDefault();
+                    if(_2ddata['mode'] === 'markers')
+                        _2ddata['mode'] = "markers+text";       
+                    else
+                        _2ddata['mode'] = "markers";
+                    
+                    setTimeout(function(){
+                        var plotDiv = document.getElementById('2d_pca_graph');
+                        plotDiv.data[0].mode = _2ddata['mode'];
+                        Plotly.redraw(plotDiv);
+                    }, 100);
+                    
+                    e.handled = true;
+                }
+            });
+           }
+           
+           Plotly.newPlot(PCAGraph2d,[_2ddata],_2dlayout,{showLink: false, displaylogo: false, displayModeBar: true, scrollZoom: true});
+           update2Dgraph();
+           printGeneList('2d');
+           printRegionList('2d');
+           
+        }
+        ///////////////////
+        //
+        // Clustering Data
+        //
+        ///////////////////         
+        function updateClusteringData(addNewClusteringMethod)
+        {
+            log.log("update clustering data");
+            if(typeof _status === 'undefined')
+            {
+                log.log("updateClusteringData : _status undefined");
+                return;
+            }
+            
+            if(typeof _parameters === 'undefined')
+            {
+                log.log("updateClusteringData : _parameters undefined");
+                return;
+            }            
+            log.log("update clustering data2");
+
+            setTimeout(function(){
+                $.getJSON(SERVER +_projectId+"/cell/clusters", {_: new Date().getTime()}, function(results) 
+                {
+                    _clustersToColorArray = [];
+                    var clusters = {};
+                    var clustersGenes = {};
+
+                    for (res in results)
+                    {
+                        if(isNaN(results[res]._clusterId) || results[res]._clusterId === -1)
+                        {
+                           _clustersToColorArray.push('rgba(0,0,0,0.1)');
+                           if(!("NO" in clusters))
+                               clusters["NO"] = Array();
+                           clusters["NO"].push(results[res]._cellName);
+
+                           clustersGenes[results[res]._cellName] = "NO";
+
+                        }
+                        else
+                        {
+                           _clustersToColorArray.push(COLORMAP[results[res]._clusterId-1]);
+                           if(!(results[res]._clusterId in clusters))
+                               clusters[results[res]._clusterId] = Array();                           
+                           clusters[results[res]._clusterId].push(results[res]._cellName);
+                           clustersGenes[results[res]._cellName] = results[res]._clusterId;
+                        }
+                    }
+
+                    // copy results
+                    _clusters = clone(clusters);
+                    _clustersGenes = clone(clustersGenes);
+                    var greyfill = Array(_clustersToColorArray.length);
+                    greyfill.fill({color:'grey'}, 0, _clustersToColorArray.length);
+                    _marker = clone({size: 9, color : _clustersToColorArray, line : greyfill });
+
+                    if(typeof _2ddata != 'undefined')
+                    {
+                        _2ddata['marker'] = {size: 9, color : _clustersToColorArray};
+                        print2DPCA();
+                        if(jQuery.isEmptyObject(_selectedCellsArray) === false)
+                        {
+                            reDrawMapArraySelection();
+                        }
+                    }
+
+                    if(typeof _3ddata != 'undefined')
+                    {
+                        colorarray3d = clone(_clustersToColorArray);
+                        _3ddata['marker'] = {size: 7, color : colorarray3d};
+                        print3DPCA();
+                    }
+
+                    if (_current_tab_selector === '3D PCA')
+                    {
+                        print3DPCA();
+                    }
+
+                    // CLUSTERS PANEL
+                    var clusterPanel = "";
+                    var nbclusts = 0;
+                    for (var res in clusters)
+                    {
+                        if(res != "NO")
+                        {
+                            clusterPanel += '<a id="cluster_click_'+res+'"> Cluster ' + res + ' ('+ COLORMAP[res-1] + '): ' + clusters[res].length + ' cells.</a><a class="btn btn-primary btn-xs" style="float:right;" id="cluster_addtoselection_'+res+'">Add cluster to selection</a><div id="clusterresult_'+res+'"></div>';
+                            nbclusts = nbclusts+1;
+                        }
+                        else
+                        {
+                            clusterPanel += '<a id="cluster_click_'+res+'">Not clustered (black) : ' + clusters[res].length + ' cells.</a> <a class="btn btn-primary btn-xs" style="float:right;" id="cluster_addtoselection_'+res+'">Add cluster to selection</a><div id="clusterresult_'+res+'"></div>';
+    ;                   }
+                    }
+
+                    if(addNewClusteringMethod && _parameters['_projectStatus'] !== 'NORMALIZED')
+                    {
+                        var cluarray = [];
+                        for (var c in clusters)
+                        {
+                            cluarray.push(clusters[c]);
+                        }
+                        addClusteringMethodToSession(formatString(_parameters['clustering_type']+' on '+_parameters['clustering_dataset']), _parameters['clustering_param1'], cluarray);
+                    }
+
+                    $('#2d_pca_clusters').empty();
+                    $('#2d_pca_clusters').append(clusterPanel);
+
+                    $('#clusters_panel_title').html("Clusters ("+nbclusts+")");
+
+                    if($('#2d_pca_clusters_panel').is(":hidden"))
+                        $('#2d_pca_clusters_panel').show(400);
+
+                    printCellContextualMenu(clusters);
+
+
+                    for(var clusterID in clusters) {
+                        var toAdd = "";
+                        for (var it in clusters[clusterID])
+                        {
+                            toAdd += '<span class="geneContextMenu">'+clusters[clusterID][it]+'</span>';
+                            if(it < clusters[clusterID].length - 1)
+                                toAdd += ", ";
+                        }
+                        if(toAdd !== "")
+                            $('#clusterresult_'+clusterID).append(toAdd).show();  
+                    };
+
+                    $('[id^="cluster_addtoselection_"]').on('click', function (e) {
+                            e.preventDefault();
+                            var clusterID = $(this).attr("id").split("_").pop();   
+                            _selectedCellsArray = {};
+                            clusters[clusterID].forEach(function(pt) {
+                                pt = pt.replace(/\./g, "-");
+                                if(!(pt in _selectedCellsArray))
+                                {
+                                    _selectedCellsArray[pt] = pt;
+                                }
+                            });
+
+                        reDrawMapArraySelection();
+
+                        printSelectionArray();
+                        printSelectionButtons();
+                    });
+                });                
+            }, 100);
+
+        }
+
+        function reDrawMapArraySelection()
+        {
+            var arrayOfExceptions = [];
+            var data;
+            if (typeof _2ddata != 'undefined')
+                data = _2ddata;
+            if (typeof _3ddata != 'undefined')
+                data = _3ddata;
+            data['text'].forEach(function(pt, idx) {
+                pt = pt.replace(/\./g, "-");
+                if(pt in _selectedCellsArray)
+                {
+                    arrayOfExceptions.push('black');
+                }
+                else
+                    arrayOfExceptions.push('rgba(0,0,0,0.1)');
+            });
+            
+            var plotDiv = document.getElementById('2d_pca_graph');
+            var plotDiv3d = document.getElementById('3d_pca_graph');
+            
+            if(typeof _2ddata != 'undefined')
+            {
+                plotDiv.data[0].marker.color = arrayOfExceptions;
+                Plotly.redraw(plotDiv);                   
+            }
+            
+            if(typeof _3ddata != 'undefined')
+            {
+                plotDiv3d.data[0].marker.color = arrayOfExceptions;
+                Plotly.redraw(plotDiv3d);                   
+            }
+        }
+        
+        updateClusteringData(addNewClustering);
+        
+        /**
+         * BINDING OF ON-DEMAND PROCESSING BUTTONS
+         */
+        function validateProcessing(type)
+        {
+            setTimeout(function () {
+                switch(type)
+                {
+                    case "2dpca":
+                    case "3dpca":
+                    case "tsne":
+                    case "3dtsne":
+                    case "zifa":
+                    case "3dzifa":
+                        $('#tab_button_'+type).removeClass('hidden');
+                        $('#tab_button_'+type).tab('show');
+                        break;                                       
+                    case "hclust":
+                        printHclust();
+                        $('#tab_button_hclust').removeClass('hidden');
+                        $('#tab_button_hclust').tab('show');
+                        break;
+                }
+            }, 200);
+
+        }        
+        function processingButtons()
+        {
+            $('[id^="launch_"]').on('click', function (e) {
+                if(e.handled !== true)
+                {
+                    e.handled = true;
+                    var type = $(this).attr("id").split("_").pop();
+                    e.preventDefault();
+                    function fileExists(url)
+                    {
+                        var http = new XMLHttpRequest();
+                        var ddate = new Date().getTime();
+                        http.open('HEAD', url+"?_="+ddate, false);
+                        http.send();
+                        return http.status!=404;
+                    }
+                    var filename = "";
+                    switch(type)
+                    {
+                        case "2dpca":
+                        case "3dpca":
+                            filename = PCA_JSON_FILENAME;
+                            break;
+                        case "tsne":
+                            filename = TSNE_JSON_FILENAME;
+                            break;
+                        case "3dtsne":
+                            filename = TSNE3D_JSON_FILENAME;
+                            break;
+                        case "zifa":
+                            filename = ZIFA_JSON_FILENAME;
+                            break;
+                        case "3dzifa":
+                            filename = ZIFA3D_JSON_FILENAME;
+                            break;
+                    }
+                    if(filename != "")
+                    {
+                        if(fileExists(UPLOAD+_projectId+"/"+filename))
+                        {
+                            validateProcessing(type);
+                            return;
+                        }
+                    }
+                    $.ajax({
+                        url: SERVER + _projectId + "/processdim/"+type,
+                        type: "POST"
+                    })
+                    .done( function(process_data) {
+                        log.log("PROCESS/DIM");
+                        log.log(process_data);
+                        printDataError(process_data);
+                    });
+
+                    
+                    var buttonSelector = Ladda.create( document.querySelector( '#launch_'+type ) );
+                    buttonSelector.start();
+                    var tid = setInterval(getProcessLockUpdate, 300);
+
+                    function getProcessLockUpdate() {
+                        $.ajax({
+                            url: SERVER + projectId,
+                            type:"GET"
+                        })
+                        .done( function(get_data) {
+                            if (get_data['_locked'].indexOf(type) < 0)
+                            {
+                                validateProcessing(type);
+                                buttonSelector.stop();
+                                clearInterval(tid);
+                            }
+                        });
+                    }
+                }
+            });   
+        }        
+        $('.nav-tabs a').on('show.bs.tab', function(event){
+            if(event.handled !== true)
+            {
+                var current_tab = $(event.target).text();
+
+                if($(event.target).attr('id') !== "tab_button_stats")
+                    _current_tab_selector = $(event.target).attr('id');
+                
+                var is3D = 0;
+                var filename = "";
+                switch(current_tab)
+                {
+                    case "3D PCA":
+                        is3D = 1;
+                        filename = PCA_JSON_FILENAME;
+                        break;
+                    case "2D PCA":
+                        is3D = 0;
+                        filename =PCA_JSON_FILENAME;
+                        break;
+                    case "3D t-SNE":
+                        is3D = 1;
+                        filename = TSNE3D_JSON_FILENAME;
+                        break;
+                    case "2D t-SNE":
+                        is3D = 0;
+                        filename = TSNE_JSON_FILENAME;
+                        break;                        
+                    case "3D ZIFA":
+                        is3D = 1;
+                        filename = ZIFA3D_JSON_FILENAME;
+                        break;
+                    case "2D ZIFA":
+                        is3D = 0;
+                        filename = ZIFA_JSON_FILENAME;
+                        break;                               
+                }
+                if(filename !== "")
+                {
+                    if (is3D === 1)
+                    {
+                        $.getJSON(UPLOAD+projectId+"/"+filename, {_: new Date().getTime()}, function(r) 
+                        {
+                            _3ddata = clone(r);                 
+                            print3DPCA();
+                            updateClusteringData(false);  
+                            printPanels(1);
+                        });   
+                    }
+                    else
+                    {
+                        $.getJSON(UPLOAD+projectId+"/"+filename, {_: new Date().getTime()}, function(r) 
+                        {
+                            _2ddata = clone(r);
+                            print2DPCA();
+                            updateClusteringData(false);             
+                            printPanels(0);
+                        });                       
+                    }
+                }
+                event.handled = true;
+            }
+        });
+        
+        // Restore last tab
+        if(typeof _current_tab_selector !== 'undefined')
+        {
+            $("#"+_current_tab_selector).tab('show');
+        }
+        
+        processingButtons();
+        
+    
+        ////////////////////////
+        // Hclust Graph START
+        ////////////////////////    
+        function printHclust()
+        {
+            var request = $.ajax({
+                url: UPLOAD+_projectId+'/hclust_html.tab',
+            })
+            .done( function(data) {
+                var numCells = _status['_status']['num_columns'];
+                var total_height = 342 + parseInt(numCells)*13;
+                var _width = 1080;
+
+                var WidgetNumber = data.match(new RegExp("data-for=\"htmlwidget-" + "(.*)" + "\">"));
+                var JsonData = data.match(new RegExp("data-for=\"htmlwidget-"+WidgetNumber[1]+"\">" + "(.*)" + "</script>"));
+                var htmlappend = "<div id=\"htmlwidget_container\"><div id=\"htmlwidget-"+WidgetNumber[1]+"\" style=\"width:"+_width+"px;height:"+total_height+";\" class=\"dendroNetwork html-widget\"></div></div>";
+                htmlappend += "<script type=\"application/json\" data-for=\"htmlwidget-"+WidgetNumber[1]+"\">"+JsonData[1]+"</script>";
+                htmlappend += "<script type=\"application/htmlwidget-sizing\" data-for=\"htmlwidget-"+WidgetNumber[1]+"\">{\"viewer\":{\"width\":"+_width+",\"height\":"+total_height+",\"fill\":false},\"browser\":{\"width\":"+_width+",\"height\":"+total_height+",\"fill\":false}}</script>";
+
+                $("#hierarchical_graph").empty();
+                $("#hierarchical_graph").append(htmlappend);
+                loadWidgets();
+                var _height = total_height;
+
+                window.HTMLWidgets.widget({
+
+                  name: "dendroNetwork",
+                  type: "output",
+
+                  initialize: function(el, width, height) {
+                    d3.select(el).append("svg")
+                      .attr("width", width)
+                      .attr("height", height)
+                      .append("g");
+
+                    return d3.layout.cluster();
+                  },
+
+                  resize: function(el, width, height, tree) {
+
+                    var s = d3.select(el).selectAll("svg")
+                      .attr("width", _width)
+                      .attr("height", _height);
+
+                    var margins = s.attr("margins");
+
+                    var top = 0,
+                      right = 40,
+                      bottom = 40,
+                      left = 40;
+
+                    height = height - top - bottom;
+                    width = width - right - left;
+
+                    if (s.attr("treeOrientation") == "horizontal") {
+                      tree.size([height, width]); 
+                    } else {
+                      tree.size([width, height]);
+                    }
+
+                    var svg = d3.select(el).selectAll("svg").select("g")
+                      .attr("transform", "translate(" + left + "," + top + ")");
+                  },
+
+                  renderValue: function(el, x, tree) {
+
+                    var s = d3.select(el).selectAll("svg")
+                      .attr("margins", x.options.margins)
+                      .attr("width", _width)
+                      .attr("height",_height)
+                      .attr("treeOrientation", x.options.treeOrientation);
+
+                    var top = parseInt(x.options.margins.top),
+                      right = parseInt(x.options.margins.right),
+                      bottom = parseInt(x.options.margins.bottom),
+                      left = parseInt(x.options.margins.left);
+
+                    var height = _height - top - bottom,
+                      width = _width - right - left;
+
+                    if (s.attr("treeOrientation") == "horizontal") {
+                      tree.size([height, width]); 
+                    } else {
+                      tree.size([width, height]);
+                    }
+
+                    var zoom = d3.behavior.zoom();
+
+                    var svg = d3.select(el).select("svg");
+                    svg.selectAll("*").remove();
+
+                    svg = svg
+                      .append("g").attr("class","zoom-layer")
+                      .append("g")
+                      .attr("transform", "translate(" + left + "," + top + ")");
+
+                    if (x.options.zoom) {
+                       zoom.on("zoom", function() {
+                         d3.select(el).select(".zoom-layer").attr("transform",
+                           "translate(" + d3.event.translate + ")"+
+                           " scale(" + d3.event.scale + ")");
+                       });
+
+                       d3.select(el).select("svg")
+                         .attr("pointer-events", "all")
+                         .call(zoom);
+
+                     } else {
+                       zoom.on("zoom", null);
+                     }
+
+                    var root = x.root;
+
+                    var xs = [];   
+                    var ys = [];   
+                    function getXYfromJSONTree(node){           
+                       xs.push(node.x);          
+                       ys.push(node.y);           
+                       if(typeof node.children != 'undefined') {                   
+                          for (var j in node.children) {                           
+                             getXYfromJSONTree(node.children[j]);                   
+                          }           
+                       }   
+                    }   
+                    var ymax = Number.MIN_VALUE;   
+                    var ymin = Number.MAX_VALUE;
+
+                    getXYfromJSONTree(root);          
+                    var nodes = tree.nodes(root);       
+                    var links = tree.links(nodes);           
+                    nodes.forEach( function(d,i){                   
+                      if(typeof xs[i] != 'undefined') {                           
+                         d.x = xs[i];                   
+                      }                   
+                      if(typeof ys[i] != 'undefined') {                           
+                         d.y = ys[i];                   
+                      }           
+                    });           
+                    var i = 0;
+                    nodes.forEach( function(d) {                   
+                      if(d.y > ymax)
+                         ymax = d.y;
+                      if(d.y < ymin)                           
+                         ymin = d.y;
+                     if (d.name === '')
+                     {
+                         d.name = '_'+i;
+                         i = i +1;
+                     }
+                    });
+
+                    if (s.attr("treeOrientation") == "horizontal") {
+                      fxinv = d3.scale.sqrt().domain([ymin, ymax]).range([0, width]);
+                      fx = d3.scale.sqrt().domain([ymax, ymin]).range([0, width]);
+                    } else {
+                      fxinv = d3.scale.linear().domain([ymin, ymax]).range([0, height]);
+                      fx = d3.scale.linear().domain([ymax, ymin]).range([0, height]);
+                    }
+
+                    // draw links
+                    var link = svg.selectAll(".link")
+                      .data(links)
+                      .enter().append("path")
+                      .style("fill", "none")
+                      .style("stroke", "#ccc")
+                      .style("opacity", "0.7")
+                      .style("stroke-width", "2px");
+
+
+                    if (x.options.linkType == "elbow") {
+                      if (s.attr("treeOrientation") == "horizontal") {
+                        link.attr("d", function(d, i) {
+                          return "M" + fx(d.source.y) + "," + d.source.x
+                            + "V" + d.target.x + "H" + fx(d.target.y);
+                        });
+                      } else {
+                        link.attr("d", function(d, i) {
+                          return "M" + d.source.x + "," + fx(d.source.y)
+                            + "H" + d.target.x + "V" + fx(d.target.y);
+                        });
+                      }
+                    } else {
+                      if (s.attr("treeOrientation") == "horizontal") {
+                        link.attr("d", d3.svg.diagonal()
+                          .projection(function(d) { return [fx(d.y), d.x]; }));
+                      } else {
+                        link.attr("d", d3.svg.diagonal()
+                          .projection(function(d) { return [d.x, fx(d.y)]; }));
+                      }
+                    }
+
+                    // draw nodes
+                    var node = svg.selectAll(".node")
+                      .data(nodes)
+                      .enter().append("g")
+                      .attr("class", "node")
+                      .on("mouseover", mouseover)
+                      .on("mouseout", mouseout);
+
+                    if (s.attr("treeOrientation") == "horizontal") {
+                      node.attr("transform", function(d) { return "translate(" + fx(d.y) + "," + d.x + ")"; });
+                    } else {
+                      node.attr("transform", function(d) { return "translate(" + d.x + "," + fx(d.y) + ")"; });
+                    }
+
+                    // node circles
+                    node.append("circle")
+                      .attr("r", 4)
+                      .attr("id", function(d) { return d.name.replace(/\./g, "-"); })
+                      .style("fill", x.options.nodeColour)
+                      .style("opacity", x.options.opacity)
+                      .style("stroke", "black")
+                      .style("stroke-width", "1px");
+
+                    // node text
+                    node.append("text")
+                      .attr("transform", "rotate(" + x.options.textRotate + ")")
+                      .style("font", "9px helvetica")
+                      .style("opacity", function(d) { return d.textOpacity; })
+                      .style("fill", function(d) { return d.textColour; })
+                      .text(function(d) { if(d.name[0] === '_') return ""; return d.name.replace(/\./g, "-"); });
+
+                    if (s.attr("treeOrientation") == "horizontal") {
+                      node.select("text")
+                        .attr("dx", function(d) { return d.children ? -8 : 8; })
+                        .attr("dy", ".31em")
+                        .attr("text-anchor", function(d) { return d.children ? "end" : "start"; });
+                    } else {
+                      node.select("text")
+                        .attr("x", function(d) { return d.children ? -8 : 8; })
+                        .attr("dy", ".31em")
+                        .attr("text-anchor", "start");
+                    }
+
+                    var clusters_array = {};
+                    var clusters_array_list = [];
+                    function colorAllChildren(myNode, clusterid)
+                    {
+                        var numElem = 0;
+                        myNode.name = myNode.name.replace(/\./g, "-");
+                        svg.select("#"+myNode.name).style("fill", COLORMAP[clusterid-1]);
+                        if(typeof myNode.children != 'undefined')
+                        {
+                            myNode.children.forEach( function(c)
+                            {
+                                numElem += colorAllChildren(c, clusterid);
+                            });
+                        }
+                        else 
+                        {
+                            numElem = 1;
+                            if(typeof clusters_array[clusterid] == 'undefined')
+                                clusters_array[clusterid] = [];
+                            clusters_array[clusterid].push(myNode);
+                        }
+                        return numElem;
+                    }
+
+                    var x_at_end;
+                    var clusters = [];
+                    var drag = d3.behavior.drag()
+                        .on("drag", function(d,i) {
+                            line_drag.attr('x1', d3.event.x)
+                                    .attr('x2', d3.event.x);
+                            x_at_end = d3.event.x;
+                        })
+                        .on('dragend', function(d,i) 
+                            {
+                                clusters = [];
+                                clusters_array = {};
+                                clusters_array_list = [];
+                                $('#hclust_clusters_list').empty();
+                                var list_at_left = [];
+                                var list_at_left_names = [];
+                                nodes.forEach( function(d) {       
+                                  if(fx(d.y) < x_at_end)        
+                                  {
+                                      list_at_left.push(d);
+                                      list_at_left_names.push(d.name);
+                                  }
+                                });
+
+                                if (list_at_left.length > COLORMAP.length)
+                                {
+                                    $('#hclust_clusters_list').append("Too many clusters !");
+                                    return;
+                                }
+                                $('#hclust_save_clusters').html("Save clusters");
+
+                                var i = 1;
+                                list_at_left.forEach( function(d) {
+                                    d.children.forEach( function(c)
+                                    {
+                                        if(list_at_left_names.indexOf(c.name) < 0) // not in the left list --> make a cluster with that.
+                                        {
+                                            clusters_array_list[i-1] = [];
+                                            clusters.push(c);
+                                            var numElem = colorAllChildren(c, i);
+                                            $('#hclust_clusters_list').append("<a id=\"cluster_click_"+i+"\">Cluster " + i + " (" + COLORMAP[i-1] +") : "+numElem + " cells.</a><br />"+'<div id="clusterresult_hclust_'+i+'"></div>'); 
+                                            i = i+1;
+                                        }
+                                    });
+                                });
+
+                                $('[id^="cluster_click_"]').each(function( index ) {
+                                    var clusterID = $(this).attr("id").split("_").pop();
+                                    var toAdd = "";
+                                    for (res in clusters_array[clusterID])
+                                    {
+                                        clusters_array_list[clusterID-1].push(clusters_array[clusterID][res].name);
+                                        toAdd += '<span class="">'+clusters_array[clusterID][res].name+'</span>';
+                                        if(res < clusters_array[clusterID].length - 1)
+                                            toAdd += ", ";
+                                    }
+                                    $('#clusterresult_hclust_'+clusterID).empty().append(toAdd).show(300);
+                                });
+
+                                $('#hclust_save_clusters').click(function(e)
+                                {
+                                   e.preventDefault();
+                                   if(e.handled !== true)
+                                   {
+                                       log.log("Save clusters hclust click button");
+                                        _parameters['clustering_type'] = 'hclust';
+                                        saveClustersToServer(clusters_array_list);
+                                        addClusteringMethodToSession("Hclust", "", clusters_array_list);
+                                        e.handled = true;
+                                   }
+                                }
+                                );                            
+
+                            }
+                    );
+                    var bar_x = 400;
+                    var line_drag = svg.append("line")
+                                    .attr("x1", bar_x)
+                                    .attr("y1", 0)
+                                    .attr("x2", bar_x)
+                                    .attr("y2", height)
+                                    .style("fill", "none")
+                                    .style("stroke", "red")
+                                    .style("opacity", "1")
+                                    .style("stroke-width", "3.5px")
+                                    .style("cursor", "pointer")
+                                    .call(drag);                
+
+                    // mouseover event handler
+                    function mouseover() {
+                      d3.select(this).select("circle").transition()
+                        .duration(750)
+                        .attr("r", 7);
+
+                      d3.select(this).select("text").transition()
+                        .duration(750)
+                        .style("stroke-width", ".5px")
+                        .style("font", "15px helvetica")
+                        .style("opacity", 1);
+                    }
+
+                    // mouseout event handler
+                    function mouseout() {
+                      d3.select(this).select("circle").transition()
+                        .duration(750)
+                        .attr("r", 4.5);
+
+                      d3.select(this).select("text").transition()
+                        .duration(750)
+                        .style("font", x.options.fontSize + "px helvetica")
+                        .style("opacity", x.options.opacity);
+                    }
+                  },
+                });
+                window.HTMLWidgets.staticRender();
+            });        
+        }
+
+        function saveClustersToServer(clusters_array_list)
+        {
+            $.getJSON(UPLOAD+_projectId+"/"+PROCESSING_JSON_FILENAME, function(formData) {
+
+                  if(typeof formData['clustertosave'] !== 'undefined')
+                      formData['clustertosave'] = [];
+
+                  formData = $('this').smartJSONextend(formData, {clustertosave:clusters_array_list, clustering_type:_parameters['clustering_type']});
+                  log.log("saveClustersToServer::New JSON");
+                  log.log(formData);
+                  log.log("array list");
+                  log.log(clusters_array_list);                  
+                  _parameters = formData;
+                  var upload_request = $.ajax({
+                        url: NAV + "AsapProcessingUpload?upload="+_projectId, // server upload action
+                        data: {jsondata:JSON.stringify(formData)},
+                        type: "POST",
+                        dataType: 'JSON'
+                    })
+                    .done( function(data) {   
+                        $.ajax({
+                          url: SERVER + _projectId + "/cell/updateclusters",
+                          type: "PUT"
+                        })
+                         .done(function(d)
+                        {
+                            updateClusteringData(false);
+                            if(_parameters['clustering_type'] === 'hclust')
+                                $('#hclust_save_clusters').html("Saved !");
+                        });
+                    });
+                });      
+        }
+
+        /**
+         * Adds the clustering results to client memory
+         * @param {type} projectId projectId
+         * @param {string} type
+         * @param {string} param
+         * @param {type} data_array in the format : list<list<string>> 
+         */
+        function addClusteringMethodToSession(type, param, data_array)
+        {
+            if (data_array === 'undefined on undefined')
+                return;
+            if (typeof data_array == 'type')
+                return;            
+            var d = new Date();
+            var datestring = d.getDate() + "/" + d.getMonth() + " " + d.getHours() + ":" + d.getMinutes();
+            datestring += "@" + d.getHours() + ":" + d.getMinutes();
+            var newClustering = {};
+            newClustering['type'] = type;
+            newClustering['param'] = param;
+            newClustering['data'] = data_array;
+            newClustering['date'] = datestring;
+            newClustering['num_clusters'] = Object.size(data_array);
+            _lastclusteringList.push(newClustering);
+            log.log("Clustering availables:")
+            log.log(_lastclusteringList);
+            fillLastClusterings();
+        }
+
+        function fillLastClusterings()
+        {
+            $("#last_clusterings_list").empty();
+            for(var clustering in _lastclusteringList.reverse())
+            {
+                $("#last_clusterings_list").append('<li><a id="clustering_rolldown_'+clustering+'"  href="#">'+_lastclusteringList[clustering]['type']+' - '+ _lastclusteringList[clustering]['num_clusters'] +' clust.</a></li>');
+            }
+
+            $('[id^="clustering_rolldown_"]').on('click', function (e) {
+                e.preventDefault();
+                if(e.handled !== true)
+                {
+                    var number = $(this).attr("id").split("_").pop();
+                    var clusters = _lastclusteringList[number]['data'];
+                    saveClustersToServer(clusters);
+                }
+                e.handled = true;
+
+            });
+        }  
+        ////////////////////////
+        // Hclust Graph END
+        ////////////////////////    
+    }
+    
+    /**
+     * Updates the text of the real time statistics plot
+     * @param {type} data JSON data return by the GET job command 
+     */
+    function updateRealtime(divname, data)
+    {
+          
+        _status = data;
+        var htmladd = "";
+        htmladd += "<table class=\"table table-hover\"><tbody>\n\
+                            <tr><td width=\"30%\">Genes (rows)</td><td width=\"70%\">" + data['_status']['num_rows'] + "</td></tr>\
+                            <tr><td>Cells (columns)</td><td>" + data['_status']['num_columns']+"</td></tr>\
+                            <tr><td data-toggle=\"tooltip\" title=\"The input data are detected as count tables if all numbers are integers. Some functions only work with count tables.\">Source file is a count table</td><td>"+data['_status']['is_count_table'];
+        
+        if (data['_status']['is_count_table'] == true)
+            htmladd += " <span class=\"glyphicon glyphicon-ok\"></span></td></tr>";
+        else
+            htmladd += " <span class=\"glyphicon glyphicon-sign\"></td></tr>";
+        
+        htmladd +="         <tr><td data-toggle=\"tooltip\" title=\"Percentage of genes with zero expression.\">Percentage of zeros</td><td>"+data['_status']['percentage_of_zeros']+"</td></tr>\
+                            <tr><td data-toggle=\"tooltip\" title=\"Average of the all genes expression\">Mean of gene expression</td><td>"+data['_status']['line_mean']+"</td></tr>\
+                            <tr><td data-toggle=\"tooltip\" title=\"Standard deviation is calculated for every gene, and then all SDs are averaged over all genes.\">Mean SD by gene</td><td>"+data['_status']['variance_row']+"</td></tr>";
+        
+        htmladd +="<tr><td data-toggle=\"tooltip\" title=\"In case of duplicate genes (genes with the same gene name), only the most expressed gene is retained.\">Duplicate genes</td><td>"+data['_status']['duplicate_genes'];
+        
+        if (data['_status']['duplicate_genes'] == "0")
+            htmladd += " <span class=\"glyphicon glyphicon-ok\"></span></td></tr>";
+        else
+            htmladd += "</td></tr>";
+        
+        
+        if (data['_status']['num_spikins'] === "0")
+            htmladd += "<tr><td data-toggle=\"tooltip\" title=\"Detected with 'ERCC' in their gene name.\">Spike-in RNA</td><td>"+data['_status']['num_spikins']+"</td></tr>";
+        
+        if (data['error_messages'].length != 0)
+        {
+            htmladd += "<tr><td>Errors</td><td>"+data['error_messages']+" <span class=\"glyphicon glyphicon-warning-sign\"></span> <button class=\"btn btn-primary btn-xs\" id=\""+divname+"_error_messages_details\">Details</button></td></tr>";
+        }
+        htmladd += "</tbody></table>";
+        
+        $('#'+divname).html(htmladd);
+        
+        $('#'+divname).append('<p><a target="_blank" href="'+UPLOAD+data['_projectId']+'/'+data['_projectStatus']+'.tab"><button class="btn btn-primary btn-xs">Download intermediate file</button></a></p>');
+        
+        
+        if(data['_status']['is_count_table'] == false)
+            $("[id$='zifa']").addClass("disabled");
+        else
+            $("[id$='zifa']").removeClass("disabled");
+
+        // Close automatically tooltip
+        $('[data-toggle=tooltip]').on('mouseenter', function()
+        {
+            var e=$(this);
+            e.off('hover');
+            $('.tooltip').remove();
+        
+            e.tooltip({
+              container : 'body',
+              trigger: 'manual'
+            }).tooltip('show');
+            
+            $('[data-toggle=tooltip]').not(this).tooltip('hide');
+
+        }).mouseout(function() {
+            $('[data-toggle=tooltip]').tooltip('hide');
+        }).mouseleave(function() {
+            $('[data-toggle=tooltip]').tooltip('hide');
+        });   
+        
+        var isErrorMessagePopoverVisible = false;
+        $('#'+divname+'_error_messages_details').on('click', function (e) {
+            if(e.handled !== true)
+            {
+                e.preventDefault();
+                if(!isErrorMessagePopoverVisible)
+                {
+                    $.ajax({
+                         url: SERVER+data['_projectId']+"/errors",          
+                         type: "GET"
+                     })
+                     .done( function(data) {
+                        var contentHtml = "";
+                        for (content in data)
+                        {
+                            contentHtml += "<p><b>"+content+"</b> : "+data[content].toString()+"</p>";
+                        }
+                         $('#'+divname+'_error_messages_details').popover({
+                            trigger: 'manual',
+                            placement: 'right',
+                            container: 'body',
+                            template: '<div class="popover" role="tooltip" style="max-width: 500px;"><div class="arrow"></div><h3 class="popover-title"></h3><div class="popover-content"><div class="data-content"></div></div></div>',
+                            html : true,
+                            title: "Errors",
+                            content: contentHtml
+                        }).popover('show');
+                        clearInterval(_realtimeTimer);
+                        isErrorMessagePopoverVisible = true;
+                    });
+                }
+                else
+                {
+                    $('.popover').popover('hide');
+                    isErrorMessagePopoverVisible = false;
+                }
+            }
+            e.handled = true;
+        });    
+    }
+    
+    /**
+     * Launches differential analysis for selected cells
+     */
+    function launchDifferentialAnalysis(selectedArray)
+    {
+        var geneList = [];
+        for (geneii in selectedArray)
+        {
+            geneList.push(selectedArray[geneii]);
+        }
+        $.ajax({
+            type: "PUT",
+            url: SERVER + _projectId + "/status/" + STATUS_DE,
+        }).done(function (data) {
+            next(STATUS_CLUSTERED, {'de_celllist': geneList});
+        });
+    }
+    
+    /**
+     * Launch enrichment
+     */
+    function launchEnrichment()
+    {
+        var regionTypeId = document.getElementById("enrichment_type1").value;
+        var enrichment_genenumber = document.getElementById("enrichment_genenumber").value;
+        var maxScore = 0;
+        $.ajax({
+             url: SERVER + _projectId + "/enrich/"+regionTypeId+"/"+enrichment_genenumber,
+             type:"GET",
+             
+        }).done( function(data) {
+            var keysSorted = Object.keys(data).sort(function(a,b){return data[a]-data[b]});
+            var results = [];
+            var i = 0;
+            for (var key in keysSorted)
+            {
+                results[i] = [];
+                results[i][0] = keysSorted[key];
+                results[i][1] = data[keysSorted[key]];
+                i = i+1;
+            }
+           
+            maxScore = 0;            
+            $.extend( $.fn.dataTableExt.oStdClasses, {
+                "sFilterInput": "form-control noblock",
+                "sLengthSelect": "form-control noblock"
+            });
+            if ( $.fn.dataTable.isDataTable( '#enrichment_results' ) ) {
+                maxScore = 0;
+                var datatable = $('#enrichment_results').dataTable().api();
+                datatable.clear();
+                datatable.rows.add(results);
+                datatable.draw();
+            }
+            else {
+                maxScore = 0;
+                $('#enrichment_results').DataTable( {
+                    data: results,
+                    "order": [[ 1, "asc" ]],
+                    select: true,
+                    dom: 'Bfrtip',
+                    buttons: [
+                    {
+                        extend: 'csv',
+                        text: 'Export all',
+                        fieldBoundary:'',
+                        exportOptions: {
+                            columns: ':visible'
+                        }
+                    },     
+                    {
+                        extend: 'csv',
+                        text: 'Export selected',
+                        fieldBoundary:'',
+                        exportOptions: {
+                            columns: ':visible',
+                            modifier: {
+                                selected: true
+                            }
+                        }
+                    }             
+                    ],                    
+                    "columnDefs":[
+                        {
+                            "targets": -1,
+                            "data": null,
+                            "defaultContent": "Score",
+                            "render" : function ( data, type, row ) 
+                            {
+                                if (maxScore === 0)
+                                {
+                                    if(row[1] === 0 || row[1] === -1 )
+                                        maxScore = -Math.log(1E-18);
+                                    else
+                                        maxScore = -Math.log(row[1]);
+                                }
+                                var score = Math.round((-Math.log(row[1]))*100/maxScore);
+                                if(row[1] === 0 || row[1] === -1)
+                                    score = 100;
+                                var progressbar = '<div class="progress" style="margin-bottom:0px"><div class="progress-bar" role="progressbar" aria-valuenow="'+score+'" aria-valuemin="0" aria-valuemax="100" style="width: '+score+'%;"></div></div>';
+                                return progressbar;
+                            }
+                        }
+                        ]            
+
+                });
+            }
+            $('#enrichment_results').show(400);
+        });
+
+        
+    }
+    
+    /**
+     * Add new project (addjob_1)
+     */
+    function addProject() {
+       
+        // check if the file is loaded
+        if($('#inputfile').attr("loaded") !== "1")
+        {
+            var text = '<div class="alert alert-danger"><strong>Error!</strong> Please upload a file.</div>';
+            $('#inputfile_div').append(text);
+            return;
+        }
+        // get processing parameters
+        var disabled = $('#addjob_1').find(':input:disabled').removeAttr('disabled');
+        var formData = $('#addjob_1').serializeObject();
+        disabled.attr('disabled','disabled');
+        if (formData['delimiter'] === "tab")
+            formData['delimiter'] = "\t";
+        
+        var buttonSelector = Ladda.create( document.querySelector( '#next_1') );
+        buttonSelector.start();
+
+        _projectId = formData['project_id'];
+        log.log("addProject: Upload data to PROCESSING.json");
+        log.log({jsondata:formData});
+        
+        // Upload processing.json
+        var upload_request = $.ajax({
+            url: NAV + "AsapProcessingUpload?upload="+_projectId, // server upload action
+            data: {jsondata:JSON.stringify(formData)},
+            type: "POST",
+            dataType: 'JSON'
+        })
+        .done( function(data) {
+            $.ajax({
+                url: SERVER + _projectId + "/" +_accountId,
+                type:"POST"
+            })
+            .done( function(post_data) {
+                log.log("POST");
+                log.log(post_data);
+                printDataError(post_data);
+                $.ajax({
+                    url: SERVER + _projectId + "/process",
+                    type:"POST"
+                })
+                .done( function(process_data) {
+                    log.log("PROCESS");
+                    log.log(process_data);
+                    goToNextStep(1, buttonSelector);
+                    printDataError(process_data);
+                });
+            });
+    });
+        upload_request.fail(function (jqXHR, textStatus) {
+            alert("Request failed: " + textStatus);
+            alert(jqXHR.statusText);
+            alert(jqXHR.responseText);
+            log.log(jqXHR.responseText);
+            alert(jqXHR.status);
+        });        
+
+    };
+    
+    /**
+     * Action for "next" button
+     * @param {type} number Button number
+     */
+    function next (number, jsonToAdd) {
+
+        // get existing processing parameters
+
+        $.getJSON(UPLOAD+_projectId+"/PROCESSING.json", function(formData) {
+            formData = $('this').smartJSONextend(formData, $('#addjob_'+number).serializeObject() );
+            formData = $('this').smartJSONextend(formData, $('#form_'+number).serializeObject() );
+            if(jsonToAdd !== 'undefined')
+            {
+                formData = $('this').smartJSONextend(formData,jsonToAdd);
+            }
+            log.log("next::New JSON");
+            log.log(formData);
+            log.log("number : "+number);
+            _parameters = formData;
+              
+            var buttonSelector = Ladda.create( document.querySelector( '#next_'+number.toString()) );
+            buttonSelector.start();
+            
+            var upload_request = $.ajax({
+                  url: NAV + "AsapProcessingUpload?upload="+_projectId, // server upload action
+                  data: {jsondata:JSON.stringify(formData)},
+                  type: "POST",
+                  dataType: 'JSON'
+              })
+              .done( function(data) {
+                  $.ajax({
+                      url: SERVER + _projectId + "/process", 
+                      type: "POST"
+                  })
+                  .done( function(process_data) {
+                      log.log(process_data);
+                      printDataError(process_data);
+                      if(parseInt(number) <= 4)
+                        goToNextStep(number, buttonSelector);
+                      else if (parseInt(number) === 4)
+                      {
+                        goToNextStep(4, buttonSelector);
+                      }
+                      else if (parseInt(number) === 5)
+                      {
+                          goToNextStep(5, buttonSelector);
+
+                      }
+                  });        
+              });
+          });
+    };
+    
+    /**
+     * Action for "previous button"
+     * @param {type} number number of the current form
+     */
+    function previous (number) {
+
+        var newnumber = number-1;
+        var request = $.ajax({
+            type: "PUT",
+            url: SERVER + _projectId + "/status/" + newnumber,            
+        })
+        .done( function(data) {
+            goToNextStep(number-2);
+        });
+        request.fail(function (jqXHR, textStatus) {
+            alert("previous::Request failed: " + textStatus);
+            alert(jqXHR.responseText);
+            log.log(jqXHR.responseText);
+        });          
+    };    
+    
+    /**
+     * Set a cluster to a specific gene
+     * @param {type} cellName
+     * @param {type} clusterId (-1 is no cluster)
+     */
+    function setCellCluster (cellName, clusterId) {
+        if(clusterId != -1)
+            _clustersGenes[cellName] = clusterId;
+        else
+            _clustersGenes[cellName] = "NO";
+        
+        var request = $.ajax({
+            url: SERVER + _projectId + "/cell/" + cellName + "/cluster/" + clusterId,
+            type: "PUT"
+        })
+        .done( function(data) {
+            
+            return true;
+        });
+        request.fail(function (jqXHR, textStatus) {
+            alert("setCellCluster::Request failed: " + textStatus);
+            log.log(jqXHR.responseText);
+            return false;
+        });          
+    };
+    
+    function deleteCell (cellName) {
+        var request = $.ajax({
+            url: SERVER + _projectId + "/cell/" +cellName,
+            type:"DELETE"
+        })
+        .done( function(data) {
+            
+            return true;
+        });
+        request.fail(function (jqXHR, textStatus) {
+            alert("deleteCell::Request failed: " + textStatus);
+            log.log(jqXHR.responseText);
+            return false;
+        });          
+    };    
+    
+    function getAtlasIds()
+    {
+        // Get data into client memory
+        if(typeof _atlasIds == 'undefined')
+        {
+            $.ajax({
+                
+                 url: SERVER + "atlas",
+                 type:"GET"
+            }).done( function(data) {
+                _atlasIds = data;  
+            });
+        }
+        // If memory is filled, add options to form
+        if( $('#atlasid').has('option').length === 0 )
+        {
+            $.each(_atlasIds, function (i, item) {
+                $('#atlasid').append($('<option>', { 
+                    value: item['_atlasId'],
+                    text : item['_name']
+                }));
+            });
+        }
+    }
+    
+    ////////////////////////
+    // Project launch form END
+    ////////////////////////   
+
+
+    ////////////////////////
+    // Project list START
+    ////////////////////////     
+  
+    function printDataError(data)
+    {
+        if (DEBUG === 0)
+            return;
+        
+        var _class;
+        if(data._errorType === 'STATUS_OK')
+            _class = "bg-info";
+        else
+            _class = "bg-danger";
+        
+        $("#info").empty();
+        $("#info")
+        .animate({opacity:0}, 100)
+        .queue(function(){
+             $(this).append('<p class="'+_class+'">'+data._errorMessage+'</p>')
+                    .dequeue()
+        })
+        .animate({opacity:1}, 1000)
+        .delay(1000)
+        .animate({opacity:0}, 1000);  
+    };
+    
+    function listProjectPopulateDiv(data)
+    {
+        $("#joblist_body").empty();
+        var i = 0;
+        //var number = Math.floor((Math.random() * Object.keys(data).length));
+        for (var projectId in data)
+        {
+            /*if (i === number)
+            {*/
+                var html ='<tr id = "'+projectId+'">' +
+                  '<td>'+data[projectId]._projectName+'</td>' +
+                  '<td>'+data[projectId]['_status'].num_columns+'</td>' +
+                  '<td>'+data[projectId]['_status'].num_rows+'</td>' +
+                  '<td>'+data[projectId]._projectStatus+'</td>' +
+                  '<td>'+data[projectId]._date+'</td>' +
+                  '<td>'+data[projectId]._lastupdateDate +'</td>' +
+                  '<td><button class="btn" id="open_'+projectId+'">Open Project</button></td>' +
+                '</tr>';
+                $("#joblist_body").append(html);
+            //}
+            i = i+1;
+        }
+        $('[id^="open_"]').on('click', function (e) {
+            _projectId = $(this).attr("id").split("_").pop();
+            e.preventDefault();
+            editProject();
+        });
+    }
+    
+    function listProjects() {
+        if (_accountId == null || _accountId == 'NaN')
+            _accountId = -1;
+        
+        var request = $.ajax({
+            url: SERVER + "all/"+_accountId,
+            type: "GET"
+        })
+        .done( function(data) {
+            
+
+            listProjectPopulateDiv(data);
+            if($("#joblist_body").is(":empty"))
+                listProjectPopulateDiv(data);
+        });
+        request.fail(function (jqXHR, textStatus) {
+            alert("Connection to the server failed !");
+        });
+    };
+
+    function delProject(projectId) {
+        if(projectId === undefined)
+            return;
+        
+        var request = $.ajax({
+            url: SERVER + projectId,
+            type:"DELETE"
+        })
+        .done( function(data) {
+            listProjects();
+            printDataError(data);
+        });
+        request.fail(function (jqXHR, textStatus) {
+            alert("delProject::Request failed: " + textStatus);
+            log.log(jqXHR.responseText);
+        });
+    };
+    
+    /**
+     * Gets a new project ID as well as events for upload forms
+     */
+    function getNewProjectId() {
+        
+        var request = $.ajax({
+            url: SERVER + "newprojectid",
+            type: "GET"
+        })
+        .done( function(projectId) {
+            $('#project_id').val(projectId);
+            _projectId = projectId;
+
+            $("#inputfile").fileinput({
+                uploadUrl: NAV + "AsapUploadServlet?upload="+_projectId, // server upload action
+                uploadAsync: true,
+                showPreview: false,
+                allowedFileExtensions: ['tab', 'txt', 'csv'],
+                showUpload: false,
+                maxFileCount: 1,
+                elErrorContainer: '#kv-error-1'
+            }).on("filebatchselected", function(event, files) {
+                // trigger upload method immediately after files are selected
+                $("#inputfile").fileinput("upload");
+            }).on('filebatchpreupload', function(event, data, id, index) {
+                $('#kv-success-1').html('<h4>Upload Status</h4><ul></ul>').hide();
+            }).on('fileuploaded', function(event, data, id, index) {
+                var fname = data.files[index].name,
+                    out = '<li>' + 'Uploaded file # ' + (index + 1) + ' - '  +  
+                        fname + ' successfully.' + '</li>';
+                $('#kv-success-1 ul').append(out);
+                $('#inputfile').attr('loaded', "1");
+                $('#kv-success-1').fadeIn('slow');
+            });
+            
+            $("#groupfile").fileinput({
+                uploadUrl: NAV + "AsapUploadServlet?groupfile=1&upload="+_projectId, // server upload action
+                uploadAsync: true,
+                showPreview: false,
+                allowedFileExtensions: ['tab', 'txt', 'csv'],
+                showUpload: false,
+                maxFileCount: 1,
+                elErrorContainer: '#kv-error-2'
+            }).on("filebatchselected", function(event, files) {
+                // trigger upload method immediately after files are selected
+                $("#groupfile").fileinput("upload");
+            }).on('filebatchpreupload', function(event, data, id, index) {
+                $('#kv-success-2').html('<h4>Upload Status</h4><ul></ul>').hide();
+            }).on('fileuploaded', function(event, data, id, index) {
+                var fname = data.files[index].name,
+                    out = '<li>' + 'Uploaded file # ' + (index + 1) + ' - '  +  
+                        fname + ' successfully.' + '</li>';
+                $('#kv-success-2 ul').append(out);
+                $('#inputfile').attr('loaded', "1");
+                $('#kv-success-2').fadeIn('slow');
+            });
+            return projectId;
+        });
+        request.fail(function (jqXHR, textStatus) {
+            alert("getNewProjectId::Request failed: " + textStatus);
+            log.log(jqXHR.responseText);
+            return 0;
+        });
+        $('[data-toggle="tooltip"]').tooltip({
+          container : 'body'
+        });       
+    };   
+    
+    function editProject() {
+        if(_projectId === undefined)
+            return;
+        
+        var request = $.ajax({
+            url: SERVER + _projectId + "/status",            
+            type:"GET"
+        })
+        .done( function(data) {
+            loadPage("page_addjob", 1, _projectId);
+            
+            if(parseInt(data) >= 6)
+            {
+                data = "5";
+            }
+            
+            goToNextStep(data-1);
+        });
+        request.fail(function (jqXHR, textStatus) {
+            alert("editProject::Request failed: " + textStatus);
+            log.log(jqXHR.responseText);
+        });
+    };
+    ////////////////////////
+    // Project list END
+    ////////////////////////       
+   
+   
+   
+    ////////////////////////
+    // Navigation data START
+    ////////////////////////
+
+    var getUrlParameter = function getUrlParameter(sParam) {
+        var sPageURL = decodeURIComponent(window.location.search.substring(1)),
+            sURLVariables = sPageURL.split('&'),
+            sParameterName,
+            i;
+
+        for (i = 0; i < sURLVariables.length; i++) {
+            sParameterName = sURLVariables[i].split('=');
+
+            if (sParameterName[0] === sParam) {
+                return sParameterName[1] === undefined ? true : sParameterName[1];
+            }
+        }
+    };
+
+    function fillFormFromAjax()
+    {
+        function fillForm(data)
+        {
+            $.each(data, function(name, val){
+                var $el = $('[name="'+name+'"]'),
+                    type = $el.attr('type');
+
+                switch(type){
+                    case 'checkbox':
+                        $el.attr('checked', 'checked');
+                        break;
+                    case 'radio':
+                        $el.filter('[value="'+val+'"]').attr('checked', 'checked');
+                        break;
+                    default:
+                        $el.val(val);
+                }
+            });  
+            changeClusteringTypeText();
+            if ($('[id^="filter_type"]').is(":visible"))
+                changeFilterText();
+        }
+        
+        if(typeof _parameters === 'undefined')
+        {
+            log.log("Parameters Loaded from File");
+            $.ajax({
+                 url: UPLOAD + _projectId + "/" + PROCESSING_JSON_FILENAME,
+                 dataType: "json",
+                 data: {_: new Date().getTime()},
+             })
+             .done( function(data) {
+                 _parameters = data;
+                fillForm(data);
+             });           
+        }
+        else
+        {
+            log.log("Parameters Loaded from Memory.");
+            log.log(_parameters);
+            fillForm(_parameters);
+        }
+    }
+    
+    /**
+     * Update realtime panel
+     */
+    function updateRealtimeTimer(divname) {
+
+        $.ajax({
+            url: SERVER + _projectId,
+            type: "GET"
+        })
+            .done(function (get_data) {
+                if(typeof get_data['_locked'] != 'undefined')
+                {
+                    if (get_data['_locked'].length === 0)
+                    {
+                        setTimeout(function () {
+                            if(get_data['_status']['is_count_table'] == false)
+                                $('.count_table_only').prop('disabled', true);
+                            updateRealtime("realtimedata",get_data);
+                            updateRealtime("stats", get_data);
+                        }, 300);
+                    }
+                }
+            });
+    }
+
+    /////////////////////
+    ///// ACCOUNTS //////
+    /////////////////////
+    
+    function createCookie(name,value,hours) {
+            if (hours) {
+                    var date = new Date();
+                    date.setTime(date.getTime()+(hours*60*60*1000));
+                    var expires = "; expires="+date.toGMTString();
+            }
+            else var expires = "";
+            document.cookie = name+"="+value+expires+"; path=/";
+    }
+
+    function readCookie(name) {
+            var nameEQ = name + "=";
+            var ca = document.cookie.split(';');
+            for(var i=0;i < ca.length;i++) {
+                    var c = ca[i];
+                    while (c.charAt(0)==' ') c = c.substring(1,c.length);
+                    if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length,c.length);
+            }
+            return null;
+    }        
+    
+    function eraseCookie(name) {
+	createCookie(name,"",-1);
+    }
+    
+    function doLogin(username, password)
+    {
+        var buttonSelector = Ladda.create( document.querySelector( '#login') );
+        buttonSelector.start();
+        
+        $.ajax({
+             url: SERVER + "account/" + username + "/" + password,
+             type: "GET"
+         })
+         .done( function(data) {
+            buttonSelector.stop();
+            if (typeof data['_errorType'] != 'undefined')
+            { 
+                // bad login           
+                var l = 20;  
+                for( var i = 0; i < 10; i++ )   
+                  $(".form-signin").animate( { 
+                      'margin-left': "+=" + ( l = -l ) + 'px',
+                      'margin-right': "-=" + l + 'px'
+                   }, 50);  
+                $("#login_alert").html("Bad username/password.")
+                $("#login_alert").alert();
+                $("#login_alert").removeClass("hidden");
+                $("#login_alert").fadeTo(2000, 500).slideUp(500, function(){
+                    $("#login_alert").alert('close');
+                });
+            }
+            else
+            {
+                _accountId = parseInt(data);
+                log.log("login successful");
+                log.log(_accountId);
+                createCookie("login", _accountId, 2);
+                loadLoginButtons();
+                loadPage("page_listjobs");
+            }
+         });  
+    }
+    
+    function doCreateAccount(username, password)
+    {
+        var buttonSelector = Ladda.create( document.querySelector( '#createaccount') );
+        buttonSelector.start();
+        
+        $.ajax({
+             url: SERVER + "account/" + username + "/" + password,
+             type:"post",
+         })
+         .done( function(data) {
+            buttonSelector.stop();
+            if(typeof data['_errorType'] == 'undefined')
+            {
+                _accountId = parseInt(data['_accountId']);
+                log.log("creation account successful");
+                log.log(_accountId);
+                createCookie("login", _accountId, 2);
+                loadLoginButtons();
+                loadPage("page_listjobs");
+            }
+            else
+            {
+                // error in account creation           
+                var l = 20;  
+                for( var i = 0; i < 10; i++ )   
+                  $(".form-signin").animate( { 
+                      'margin-left': "+=" + ( l = -l ) + 'px',
+                      'margin-right': "-=" + l + 'px'
+                   }, 50);
+                $("#login_alert").html("Error : account already exists.");
+                $("#login_alert").alert();
+                $("#login_alert").removeClass("hidden");
+                $("#login_alert").fadeTo(2000, 500).slideUp(500, function(){
+                    $("#login_alert").alert('close');
+                });
+            }
+         });  
+    }
+    
+    function doLogout()
+    {
+        eraseCookie("login");
+        _accountId = -1;
+        unloadLoginButtons();
+        loadPage("page_listjobs");
+    }
+    
+    function loadLoginButtons()
+    {
+        $("#logout").removeClass("hidden");
+        $("#page_login").html("My analyzes");        
+    }
+    
+    function unloadLoginButtons()
+    {
+        $("#logout").addClass("hidden");
+        $("#page_login").html("Login");        
+    }
+    
+    function changeFilterText()
+    {
+        var id = "filter_type1";
+        var str = "filter_parameter1";
+        var label = $("label[for='"+str+"']");
+        var selector = $("#"+id);
+        $("#filter_parameter2").hide();
+        $("label[for='filter_parameter2']").hide();
+        if (selector.val() === "expressed")
+        {
+            label.html("Threshold (% of genes kept in the data frame)");
+        }
+        else if (selector.val() === "var_coeff")
+            label.html("Threshold (% of genes kept in the data frame)");
+        else if (selector.val() === "mean")
+            label.html("Minimum mean of read counts per gene (count #)");
+        else if (selector.val() === "scde")
+        {
+            label.html("Minimum number of reads per gene (count #)");
+
+            if(typeof _status != 'undefined')
+            {
+                $("#filter_parameter2").val(Math.floor(_status['_status']['num_columns']/2.0));
+            }
+
+            $("label[for='filter_parameter2']").show();
+            $("#filter_parameter2").show();
+        }
+    }
+    /////////////////////////////////
+    ////////// END ACCOUNT //////////
+    /////////////////////////////////
+    
+    function clearVars()
+    {
+        _clustersGenes = {};
+        _clusters = {};
+        _projectId = -1;
+        _lastclusteringList = [];
+        _parameters = undefined;
+        _current_tab_selector = "tab_button_stats";
+    }
+    function loadPage(page, edit, id)
+    {
+        /**
+         * Login
+         */
+        if(readCookie("login") !== null && readCookie("login") !== 'NaN')
+            _accountId = parseInt(readCookie("login"));
+        
+        if (_accountId > 0)
+        {
+            loadLoginButtons();
+            if(page === 'page_login')
+                page = 'page_listjobs';
+        }
+        
+        /**
+         * Page load
+         */
+        
+        $( "#main" ).load( NAV + page + ".html?" + $.param({
+        _: new Date().getTime()}), function() {
+        
+            getAtlasIds();
+            
+            // For job editing
+            if(edit === 1)
+            {
+                $('body').css({'overflow':'hidden'});
+                $('#status').fadeIn();
+                $('#preloader').fadeIn();          
+                
+                clearVars();
+                
+                document.getElementById("project_id").value = id;
+                _projectId = id;
+                $('[id^="addjob_"]').hide();
+                
+                // Fill form from AJAX
+                fillFormFromAjax();
+            }
+            
+            // Event bindings !
+            // 
+            // LOGIN BUTTON
+            $('#loginform').on('submit', function (e) {
+                e.preventDefault();
+                var username = $("#username").val();
+                var password = $("#password").val();
+                doLogin(username,password);
+            });        
+            // LOGOUT
+            
+            $('#logout').click(function (e) {
+                if(e.handled !== true) // This will prevent event triggering more then once
+                {
+                    e.preventDefault();
+                    doLogout();
+                    e.handled = true;
+                }
+            });
+            // create account
+            $('#createaccount').click(function (e) {
+                if(e.handled !== true) // This will prevent event triggering more then once
+                {
+                    e.preventDefault();
+                    var username = $("#username").val();
+                    var password = $("#password").val();                
+                    doCreateAccount(username,password);
+                    e.handled = true;
+                }                
+            });            
+            // JOB ADD Next button
+            $('[id^="addjob_"]').on('submit', function (e) {
+                e.preventDefault();
+                var number = $(this).attr("id").split("_").pop();
+                if (number === "1")
+                    addProject();
+                else
+                    next(number);
+            });
+            // Filter page : add more button
+            $('#filter_add').click(function (e) {
+                e.preventDefault();
+                if ($("#filter2").hasClass("hidden"))
+                {
+                    $("#filter2").removeClass("hidden",500);
+                }
+                else
+                {
+                    $("#filter3").removeClass("hidden",500);
+                    $(this).hide();
+                }
+            }); 
+            
+            // JOB ADD Previous button        
+            $('[id^="previous_"]').on('click', function (e) {
+                var number = parseInt($(this).attr("id").split("_").pop());
+                e.preventDefault();
+                previous(number);
+            });     
+
+            // JOB ADD filters label
+            $('[id^="filter_type"]').on("click", function(e) {
+                e.preventDefault();
+                changeFilterText();
+            });
+            
+            // popovers for selects
+            popover_list();
+           
+            // right click on job tab
+            var _rightclickid;
+            $("body").on("contextmenu", "table tr", function(e, t) {
+               $("#contextMenu").css({
+                display: "block",
+                left: e.pageX - $("#sidebar").width(),
+                top: e.pageY - 20
+              });
+              _rightclickid = e.target.parentNode.id;
+              return false;
+            });
+
+             $("#contextMenu").on("click", "#dropdown_delete", function(e) {
+                e.preventDefault();
+                delProject(_rightclickid);
+                $("#contextMenu").hide();
+            });
+             $("#contextMenu").on("click", "#dropdown_process", function(e) {
+                e.preventDefault();    
+                _projectId = _rightclickid;
+                editProject(_rightclickid);
+                $("#contextMenu").hide();
+            });
+             $("#contextMenu").on("click", "#dropdown_close", function(e) {
+                e.preventDefault();                
+                $("#contextMenu").hide();
+            });
+        });
+
+        $('[id^="page_"]').parent().removeClass('active');
+        $("#"+page).parent().addClass('active');        
+        // Tasks at page load
+              
+        if(page === 'page_login')
+        {
+            $('#login_alert').hide();
+        }
+        if(page === 'page_listjobs')
+        {
+            $('#leftbar').empty();
+            $('#leftbar').append("Welcome to the control panel. Here are all the projects contained in the server's memory");
+            var maxId = setTimeout(function(){}, 0);
+
+            for(var i=0; i < maxId; i+=1) { 
+                clearTimeout(i);
+            }
+            setTimeout(function(){ listProjects(); }, 200);
+
+        }
+        else if (page === 'page_addjob' && edit !== 1)
+        {
+            if($('#joblist tr').length > 15)
+            {
+                alert("DEMO VERSION : you cannot add more than 15 projects");
+                window.location.reload(false); 
+            }
+            clearVars();
+            $('#leftbar2').empty();
+            $('#leftbar').empty();
+            delay(function() {
+                getNewProjectId();
+            }, 300);
+            
+            //changeFilterText();
+
+        }
+        if (page === 'page_addjob')
+        {
+            // Refresh realtime status
+            //_realtimeTimer = setInterval(function() { updateRealtimeTimer("realtimedata"); }, 1800);
+        }
+    }
+    
+    var page = getUrlParameter('page');
+    if (page !== undefined)
+        loadPage(page);
+    else
+        loadPage("page_listjobs");
+
+    $('[id^="page_"]').click(function( event ) {
+        event.preventDefault();
+        if(event.handled !== true)
+        {
+            if ( $(this).attr("page") !== 'undefined')
+                loadPage($(this).attr("id"));
+            event.handled = true;
+        }
+    });
+    ////////////////////////
+    // Navigation data END
+    ////////////////////////
+
+    
+   
+    function popover_list()
+    {
+        $(".popover_list").on('change', function (e) {
+            var optionSelected = $("option:selected", this);
+            $(this).popover({
+                trigger: 'manual',
+                placement: 'right',
+                title: optionSelected.attr("data-title"),
+                content: optionSelected.attr("data-content")
+            }).popover('show');
+            $(this).data('bs.popover').options.content = optionSelected.attr("data-content");
+            $(this).data('bs.popover').options.title = optionSelected.attr("data-title");
+            $(this).popover('show');
+            
+        });
+    }
+    
+      
+});

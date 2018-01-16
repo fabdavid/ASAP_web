@@ -1,0 +1,35 @@
+<p id="notice"><%= notice %></p>
+
+<h1>Tools</h1>
+
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Label</th>
+      <th>Tool type</th>
+      <th>Steps</th>
+      <th>Description</th>
+      <th colspan="3"></th>
+    </tr>
+  </thead>
+
+  <tbody>
+    <% @tools.each do |tool| %>
+      <tr>
+	<td><%= tool.name %></td>
+	<td><%= tool.label %></td>
+	<td><%= (tool.tool_type) ? tool.tool_type.name : 'NA' %></td>
+	<td><%= Step.where(:id => (tool.step_ids) ? tool.step_ids.split(",") : []).all.sort.map{|e| e.label}.join(", ") %></td>
+	<td><%= tool.description %></td>
+        <td><%= link_to 'Show', tool %></td>
+        <td><%= link_to 'Edit', edit_tool_path(tool) %></td>
+        <td><%= link_to 'Destroy', tool, method: :delete, data: { confirm: 'Are you sure?' } %></td>
+      </tr>
+    <% end %>
+  </tbody>
+</table>
+
+<br>
+
+<%= link_to 'New Tool', new_tool_path %>

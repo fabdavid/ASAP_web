@@ -1,0 +1,44 @@
+<p id="notice"><%= notice %></p>
+
+<h1>Diff Expr Methods</h1>
+
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Label</th>
+      <th>Description</th>
+      <th>Speed</th>
+      <th>Link</th>
+      <th>Attr_json</th>
+      <th>Command line</th>
+      <th>Creates AvNormG1/2</th>
+      <th>Handles log</th>
+      <th colspan="3"></th>
+    </tr>
+  </thead>
+
+  <tbody>
+    <% @diff_expr_methods.each do |d| %>
+      <tr>
+	     <tr>
+        <td><%= d.name %></td>
+        <td><%= d.label %></td>
+        <td><%= d.description %></td>
+        <td><%= d.speed_id %></td>
+        <td><%= d.link %></td>
+        <td><%= d.attrs_json %></td>
+        <td><%= d.program %></td>
+	<td><%= (d.creates_av_norm == true) ? 'Yes' : 'No' %></td>
+        <td><%= (d.handles_log == true) ? 'Yes' : 'No' %></td>
+        <td><%= link_to 'Show', d %></td>
+        <td><%= link_to 'Edit', edit_diff_expr_method_path(d) %></td>
+        <td><%= link_to 'Destroy', d, method: :delete, data: { confirm: 'Are you sure?' } %></td>
+      </tr>
+    <% end %>
+  </tbody>
+</table>
+
+<br>
+
+<%= link_to 'New Diff Expr Method', new_diff_expr_method_path %>

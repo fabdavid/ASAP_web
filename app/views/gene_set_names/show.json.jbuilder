@@ -1,0 +1,1 @@
+json.partial! "gene_set_names/gene_set_name", gene_set_name: @gene_set_name

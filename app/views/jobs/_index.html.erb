@@ -1,0 +1,85 @@
+<% if @jobs.size > 0 %>
+
+<table id='jobs' class='job_list'>
+  <thead>
+    <tr>
+<% if admin? %>
+      <th>Key</th>
+<% end %>
+      <th>Name</th>
+      <th>Organism</th>
+      <th>Step</th>
+      <th>Status</th>
+      <th>Duration</th>
+      <th>Created (GMT)</th>
+<% if admin? %>
+      <th>User</th>
+      <th>Sandbox?</th>
+<% end %>
+<% if current_user %>
+      <th>Public?</th>
+<% end %>
+      <th></th>
+    </tr>
+  </thead>
+
+  <tbody>
+    <% @jobs.sort{|a, b| b.created_at <=> a.created_at}.each do |job| %>
+      <% project = job.project %>
+      <tr>
+<% if admin? %>
+        <td><%= (project) ? project.key : 'DELETED' %></td>
+<% end %>
+        <td><%= (project) ? project.name : 'DELETED' %></td>
+        <td><%= (project) ? @h_organisms[project.organism_id].short_name.capitalize : 'DELETED' %></td>
+        <td><%= ((step = job.step) ? step.label : 'NA') %></th>
+        <td><%= raw ((status = job.status) ? "<span class='label label-#{status.label}'>#{status.name}</span>" : 'NA') %></td>
+        <td><%= raw ((job.duration) ? (duration((job.status_id == 2) ? (Time.now - job.updated_at) : job.duration)) : '') %></td>
+        <td><%= raw display_date(job.created_at) %></td>
+<% if admin? %>
+	<td><%= (project and project.user) ? project.user.email : 'NA' %></td>
+	<td><%= (project and project.sandbox == true) ? 'Yes' : 'No' %></td>
+<% end %>
+<% if current_user %>
+        <td><%= (project and project.public == true) ? 'Yes' : 'No' %></td>
+<% end %>
+        <td>
+ <% if admin? and project %>
+    	  <%= button_to 'Open project', project_path(project.key), {:class => 'btn btn-primary', :method => 'get'} %>
+<% end %>
+</td>
+      </tr>
+    <% end %>
+  </tbody>
+</table>
+
+
+<%= javascript_tag do %>
+
+$(document).ready(function() {
+    /* Build the DataTable with third column using our custom sort functions */
+//    var oTable = $('#projects').dataTable( {
+      //  "pageLength": 50
+      //  "order": [[ 6, "desc" ]]
+//"bSort": false,
+//aaSorting: []
+ //   });
+
+$("a").on('click',function(event){
+var href = this.href;
+event.preventDefault();
+window.clearInterval(timer);
+//window.clearTimeout(timer);
+window.location = href;
+});
+
+$(".delete_item").click(function(){
+ var t = this.id.split("_");
+ refresh_post("project_list", '<%= projects_path() %>/' + t[1], {}, 'delete');
+});
+
+
+});
+<% end %>
+
+<% end %>

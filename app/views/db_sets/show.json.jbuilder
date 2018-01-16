@@ -1,0 +1,1 @@
+json.partial! "db_sets/db_set", db_set: @db_set

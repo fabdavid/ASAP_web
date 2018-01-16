@@ -1,0 +1,101 @@
+<p id="notice"><%= notice %></p>
+
+<div id='infos' class='row'>
+<div class='col-md-6'>
+<div id='reference' class='alert alert-info'>
+<span class='glyphicon glyphicon-bullhorn'></span> This work has been published in <a href='https://doi.org/10.1093/bioinformatics/btx337'>Bioinformatics</a>.<br/>
+<span class='glyphicon glyphicon-fire'></span> New release (2.0) available. Check details <%= link_to 'here', last_version_versions_path() %>.<br/>  
+<span class='glyphicon glyphicon-info-sign'></span> This page is refreshed automatically every minute.
+</div>
+</div>
+<div class='col-md-6'>
+<div class='alert alert-warning'>
+The application has been tested with IE Edge 38.14393 / EdgeHTML 14.14393, Chrome 56.0.2924.87, Firefox 52.0.2 and Safari 10.1 (10603.1.30.0.34). If you are using the older version of one of these browsers or a different browser, you might have some rendering issues.
+</div>
+</div>
+</div>
+<!--<div class='alert alert-danger'>
+Dear users, we are currently experiencing a problem with the parsing in certain cases. We are investigating this issue. Sorry for the inconvenience.
+</div>
+-->
+<% if !current_user %>
+<div style='display:table-cell'><span style='font-size:10px'>The sandbox stores temporarily one project until your session ends.
+To get a <b>personal data storage and keep track of projects</b>, please
+<%= link_to 'Login', new_user_session_path, {:class => 'btn btn-default btn-xs'} %>
+</span></div>
+<% end %>
+
+<div id='project_lists'>
+<%= render :partial => 'index' %>
+</div>
+
+<%= javascript_tag do %>
+
+var flag=0;
+
+function refresh_lists (){
+ var search_box = $("#free_text");
+ var public_search_box = $("#public_free_text");
+ var limit = $("#limit");
+ var public_limit = $("#public_limit");
+ var p = "free_text=" + ((search_box.val()) ? search_box.val() : '');
+ p = p + "&public_free_text=" + ((public_search_box.val()) ? public_search_box.val() : '');
+ if (limit.val())
+ p = p + "&limit=" + limit.val();
+ if (public_limit.val())
+ p = p + "&public_limit=" + public_limit.val();
+ $.ajax({
+  url: "<%= projects_path(:nolayout => 1) %>&" + p,
+  type: "get",
+  dataType: "html",
+  beforeSend: function(){
+  },
+  success: function(returnData){
+   var div = $("#project_lists");
+   div.html(returnData);
+  },
+  error: function(e){
+  }
+ });
+}
+
+
+<% if @projects.size > 0 %>
+
+var timer = setInterval(function(){
+refresh_lists('')
+}, 60000);
+
+$("#search_btn").click(function(){
+ refresh_lists()
+});
+$("#public_search_btn").click(function(){
+ refresh_lists()
+});
+
+
+function warning() {
+     return "You are leaving the page";
+}
+
+function noTimeout() {
+    clearTimeout(timer);
+}
+
+function nointerval(){
+alert("test");
+clearInterval(timer);
+}
+
+$("#tt").click(nointerval);
+window.onbeforeunload = nointerval;
+window.unload = nointerval;
+
+
+ 
+<% end %>
+
+//refresh_lists()
+
+
+<% end %>

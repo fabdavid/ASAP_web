@@ -1,0 +1,22 @@
+<%= form_for(speed) do |f| %>
+  <% if speed.errors.any? %>
+    <div id="error_explanation">
+      <h2><%= pluralize(speed.errors.count, "error") %> prohibited this speed from being saved:</h2>
+
+      <ul>
+      <% speed.errors.full_messages.each do |message| %>
+        <li><%= message %></li>
+      <% end %>
+      </ul>
+    </div>
+  <% end %>
+
+<table>
+<tr><td>Name</td><td><%= f.text_field :name %></td></tr>
+<tr><td>Logo</td><td><%= f.text_field :logo %></td></tr>
+</table>
+
+  <div class="actions">
+    <%= f.submit %>
+  </div>
+<% end %>

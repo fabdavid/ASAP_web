@@ -1,0 +1,44 @@
+<p id="notice"><%= notice %></p>
+
+<h1>Gene Sets</h1>
+
+<table id ='gene_sets'>
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Label</th>
+      <th>Tool</th>
+      <th>Filename</th>
+      <th>Nber of sets</th>
+      <th colspan="3"></th>
+    </tr>
+  </thead>
+
+  <tbody>
+    <% @gene_sets.each do |gene_set| %>
+      <tr>
+	<td><%= gene_set.id %></td>
+	<td><%= gene_set.label %></td>
+	<td><%= DbSet.where(:id => gene_set.ref_id).first.label %></td>
+	<td><%= gene_set.original_filename %></td>
+	<td><%= gene_set.nb_items %></td>
+	
+        <td><%= link_to 'Show', gene_set %></td>
+        <td><%= link_to 'Edit', edit_gene_set_path(gene_set) %></td>
+        <td><%= link_to 'Destroy', gene_set, method: :delete, data: { confirm: 'Are you sure?' } %></td>
+      </tr>
+    <% end %>
+  </tbody>
+</table>
+
+<br>
+
+<%= link_to 'New Gene Set', new_gene_set_path %>
+
+<%= javascript_tag do %>
+
+$(document).ready(function() {
+   $('#gene_sets').dataTable();
+});
+
+<% end %>

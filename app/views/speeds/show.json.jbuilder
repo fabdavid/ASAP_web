@@ -1,0 +1,1 @@
+json.partial! "speeds/speed", speed: @speed

@@ -1,0 +1,1 @@
+json.partial! "diff_expr_methods/diff_expr_method", diff_expr_method: @diff_expr_method

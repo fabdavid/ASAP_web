@@ -1,0 +1,38 @@
+<%= form_for(gene_set) do |f| %>
+  <% if gene_set.errors.any? %>
+    <div id="error_explanation">
+      <h2><%= pluralize(gene_set.errors.count, "error") %> prohibited this gene_set from being saved:</h2>
+
+      <ul>
+      <% gene_set.errors.full_messages.each do |message| %>
+        <li><%= message %></li>
+      <% end %>
+      </ul>
+    </div>
+  <% end %>
+
+<table>
+<tr>
+<td>Organism</td>
+<% l =  Organism.all.map{|o| [o.name, o.id]} %>
+<td><%= f.select :organism_id, l %></td>
+</tr>
+<tr>
+<td>Database</td>
+<% l =  Tool.all.select{|t| t.tool_type_id == 1}.map{|t| [t.label, t.id]} %>
+<td><%= f.select :ref_id, l %></td>
+</tr>
+<tr>
+<td>Label</td>
+<td><%= f.text_field :label %></td>
+</tr>
+<tr>
+<td>Filename</td>
+<td><%= f.text_field :original_filename %></td>
+</tr>
+</table>
+
+  <div class="actions">
+    <%= f.submit %>
+  </div>
+<% end %>

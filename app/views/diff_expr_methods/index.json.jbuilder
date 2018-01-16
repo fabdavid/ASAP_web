@@ -1,0 +1,1 @@
+json.array! @diff_expr_methods, partial: 'diff_expr_methods/diff_expr_method', as: :diff_expr_method

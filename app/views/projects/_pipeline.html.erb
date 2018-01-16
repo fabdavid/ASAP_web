@@ -1,0 +1,98 @@
+<% h_nber = {5 => Cluster, 6 => DiffExpr, 7 => GeneEnrichment} %>
+<nav class="navbar navbar-light bg-faded  navbar-fixed-top" style='margin-top:50px;padding-top:10px; background-color:white;z-index:10000'>
+<!--<div class="col-md-12 text-center">-->
+<!--<div id='project_label'><p class="navbar-brand" href="#">Project '<%= @project.name || 'No name' %>' on <%= (@project.organism) ? @project.organism.short_name : 'No name' %>
+<button type='button' id='edit_project' class='btn btn-default'>Edit project <%= image_tag('edited.png', :width => '15px', :style => 'margin-top:-10px;') %></button>
+-->
+<!--<sup><span id='edit_project_name' class='link'>edit</span></sup>
+</p>
+<span id='form_project_name' class='navbar-brand hidden'></span>
+</span>
+<span id= 'project_organism'><p class="navbar-brand" href="#">on <%= (@project.organism) ? @project.organism.name : 'No name' %> 
+<sup><span id='edit_project_organism' class='link'>edit</span></sup>
+</p>
+<span id='form_project_organism' class='navbar-brand hidden'></span>
+</div>-->
+
+<div id='pipeline' class="nav nav-pills">
+<div style='float:left'>
+<p class="navbar-brand">Project '<%= @project.name || 'No name' %>' on <%= (@project.organism) ? @project.organism.short_name : 'No name' %></p>
+<% if authorized? %>
+<button type='button' id='edit_project' class='btn btn-default'>Edit project <%= image_tag('edited.png', :width => '15px', :style => 'margin-top:-10px;') %></button>
+<% end %>
+<% if read_only?(@project) %>
+<div style='position: fixed; font-weight:bold; font-size:9px;top:60px;left:15px'>Read-only mode <span id='clone_button' class='label label-success'>Clone to get full control</span></div>
+<% end %>
+</div>
+<div style='float:left;padding-left:10px'>
+<% Step.all.sort.select{|s| ProjectStep.where(:project_id => @project.id, :step_id => s.id).first}.each do |step| %>
+ <% img =  image_tag('', :width => '15px', :class => 'hidden', :style => 'margin-top:-10px;') %>
+ <% status = ProjectStep.where(:project_id => @project.id, :step_id => step.id).first.status %>
+ <% img = image_tag(status.name + "." + status.img_extension, :width => '15px', :style => 'margin-top:-10px;') if status and step.id < 5 %>
+
+ <% class_names = ['btn', 'btn-primary', 'pipeline_step', 'disabled'] %>
+ <%# class_names.push('active') if step.id == session[:active_step] %>
+ <%# class_names.push('disabled') if @project.step_id < 3 and (step.id > @project.step_id + 1 or ( step.id == @project.step_id+1 and @project.status.id != 3)) %> 
+<!-- <button type='button' id="step_<%= step.id %>" class="<%= class_names.join(" ") %>" ><%= raw step.label.capitalize %> <span class='nber label label-default'><%= h_nber[step.id].where(:project_id => @project.id, :status_id => 3).count || 0 if step.id > 4 %></span> <%= img %></button>-->
+<button type='button' <%= raw "data-toggle='tooltip' title=''" if step.id == 6 %> id="step_<%= step.id %>" class="<%= class_names.join(" ") %>" ><%= raw step.label.capitalize %> <span class='nber label label-default'><%= '0' if step.id > 4 %></span> <%= img %></button>
+<!-- data-toggle="tooltip" data-placement="bottom" title="Tooltip on bottom" -->
+<% end %>
+</div>
+</div>
+<!--</div>-->
+</nav>
+
+<%= javascript_tag do %>
+
+//$(".pipeline_step").tooltip();
+
+$("#edit_project").click(function(){
+refresh("form_container", "<%= edit_project_path(@project.key) %>?global=1");
+$("#ontop_window").removeClass("hidden");
+});
+
+
+/*
+$("#edit_project_name").click(function(){
+$("#project_name p").addClass('hidden');
+$("#form_project_name").removeClass('hidden');
+});
+
+$("#edit_project_organism").click(function(){
+$("#project_organism p").addClass('hidden');
+$("#form_project_organism").removeClass('hidden');
+});
+*/
+
+$(".pipeline_step").click(function(){
+var step_id = this.id.split("_")[1];
+for (var i=1; i<=<%= Step.count %>; i++){
+ $("#step_" + i).removeClass("active");
+}
+if (!$(this).hasClass("disabled")){
+ $(this).addClass("active");
+ $("#popup_window").addClass('hidden');
+ refresh("step_container", "<%= get_step_project_path(:key => @project.key, :nolayout => 1) %>&active_step=" + step_id);
+}
+$("#popup_window").addClass('hidden');
+});
+
+<% if session[:active_step] == 4 %>
+ var pdrs = <%= raw @project.project_dim_reductions.map{|pdr| [pdr.dim_reduction_id, ((pdr.status_id) ? raw(image_url(@h_statuses[pdr.status_id].name + "." + @h_statuses[pdr.status_id].img_extension)) : '')]}.to_json %>;
+ for (var i=0; i<pdrs.length; i++){
+  $("#dr_" + pdrs[i][0] + " img").attr("src", pdrs[i][1]);
+ }
+ $('#dim_reduction_tabs li.active').removeClass('active');
+<% if  session[:active_dr_id] %>
+ $("#dr_" + <%= session[:active_dr_id] %>).parent().addClass("active");
+<% end %>
+<% end %>
+
+$("#clone_button").click(function(){
+window.location = "<%= clone_project_path(@project.key) %>";
+});
+
+//$('[data-toggle="tooltip"]').tooltip();
+
+<% end %>
+

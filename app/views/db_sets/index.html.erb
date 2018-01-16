@@ -1,0 +1,43 @@
+<p id="notice"><%= notice %></p>
+
+<h1>Db Sets</h1>
+
+<table id='db_sets'>
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Database</th>
+      <th>Label</th>
+      <th>Tag</th>
+      
+      <th colspan="3"></th>
+    </tr>
+  </thead>
+
+  <tbody>
+    <% @db_sets.each do |db_set| %>
+      <tr>
+	<td><%= db_set.id %></td>
+	<td><%= db_set.tool.label %></td>
+	<td><%= db_set.label %></td>
+	<td><%= db_set.tag %></td>
+        <td><%= link_to 'Show', db_set %></td>
+        <td><%= link_to 'Edit', edit_db_set_path(db_set) %></td>
+        <td><%= link_to 'Destroy', db_set, method: :delete, data: { confirm: 'Are you sure?' } %></td>
+      </tr>
+    <% end %>
+  </tbody>
+</table>
+
+<br>
+
+<%= link_to 'New Db Set', new_db_set_path %>
+
+<%= javascript_tag do %>
+
+$(document).ready(function() {
+   $('#db_sets').dataTable();
+});
+
+<% end %>
+

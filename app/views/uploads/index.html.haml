@@ -1,0 +1,11 @@
+%h1 
+  All uploads
+  = link_to 'Add a new upload', new_upload_path, class: "btn btn-large btn-success"
+%hr
+.padding-bottom
+
+
+- @uploads.each do |upload|
+  .row
+    = link_to upload.name, upload
+

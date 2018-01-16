@@ -1,0 +1,1 @@
+json.partial! "cluster_methods/cluster_method", cluster_method: @cluster_method

@@ -1,0 +1,1 @@
+json.array! @gene_set_names, partial: 'gene_set_names/gene_set_name', as: :gene_set_name

@@ -1,0 +1,41 @@
+<p id="notice"><%= notice %></p>
+
+<h1>Filters</h1>
+
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Label</th>
+      <th>Description</th>
+      <th>Speed</th>
+      <th>Link</th>
+      <th>Attr_json</th>      
+      <th>Command line</th>
+      <th>Handles log</th>
+      <th colspan="3"></th>
+    </tr>
+  </thead>
+
+  <tbody>
+    <% @filter_methods.each do |filter| %>
+      <tr>
+	<td><%= filter.name %></td>
+	<td><%= filter.label %></td>
+	<td><%= filter.description %></td>
+	<td><%= filter.speed_id %></td>
+        <td><%= filter.link %></td>
+	<td><%= filter.attrs_json %></td>
+	<td><%= filter.program %></td>
+        <td><%= (filter.handles_log == true) ? 'Yes' : 'No' %></td>
+        <td><%= link_to 'Show', filter %></td>
+        <td><%= link_to 'Edit', edit_filter_method_path(filter) %></td>
+        <td><%= link_to 'Destroy', filter, method: :delete, data: { confirm: 'Are you sure?' } %></td>
+      </tr>
+    <% end %>
+  </tbody>
+</table>
+
+<br>
+
+<%= link_to 'New Filter', new_filter_method_path %>

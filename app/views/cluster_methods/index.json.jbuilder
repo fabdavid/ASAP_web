@@ -1,0 +1,1 @@
+json.array! @cluster_methods, partial: 'cluster_methods/cluster_method', as: :cluster_method

@@ -1,0 +1,41 @@
+<p id="notice"><%= notice %></p>
+
+<h1>Cluster Methods</h1>
+
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Label</th>
+      <th>Description</th>
+      <th>Speed</th>
+      <th>Link</th>
+      <th>Attr_json</th>
+      <th>Warning</th>
+      <th>Command line</th>
+      <th colspan="3"></th>
+    </tr>
+  </thead>
+
+  <tbody>
+    <% @cluster_methods.each do |c| %>
+      <tr>
+	<td><%= c.name %></td>
+        <td><%= c.label %></td>
+        <td><%= c.description %></td>
+	<td><%= c.speed_id %></td>
+        <td><%= c.link %></td>
+	<td><%= c.warning %></td>
+        <td><%= c.attrs_json %></td>
+        <td><%= c.program %></td>
+        <td><%= link_to 'Show', c %></td>
+        <td><%= link_to 'Edit', edit_cluster_method_path(c) %></td>
+        <td><%= link_to 'Destroy', c, method: :delete, data: { confirm: 'Are you sure?' } %></td>
+      </tr>
+    <% end %>
+  </tbody>
+</table>
+
+<br>
+
+<%= link_to 'New Cluster Method', new_cluster_method_path %>
