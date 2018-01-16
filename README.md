@@ -3,7 +3,8 @@
 Here are the source codes used on the server to run the different tools available on <a href="https://asap.epfl.ch">ASAP</a>.
 
 Mostly, this is composed of:
-- [Standalone scripts](https://github.com/DeplanckeLab/ASAP) 
+- [Standalone scripts](https://github.com/DeplanckeLab/ASAP)
+  - JAVA code
   - R scripts (for most of the tools)
   - Python script (for ZIFA visualization method)
 - [Ruby-On-Rails Server code](https://github.com/fabdavid/ASAP_web)
